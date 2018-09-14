@@ -57,7 +57,14 @@ float** filterMARP(int** A, float* x, float e, int max_iterations, float a, int 
 
 float* compy(int** Acn, float* x, int size){ //Acn*x  pollaplasiasmos
 	float* y;
-	
+	y = malloc(size*sizeof(float));
+	int i,j;
+	for(i=0; i<size; i++){
+		for(j=0; j<size; j++){
+			y[i] += Acn[i][j]*x[j];
+		}
+	}
+	return y;
 }
 
 void filterA(int** A, int** Ann, int** Acn, int* C_new, int* N_new, int size){
