@@ -1,6 +1,4 @@
 
-
-
 //ALGORITHM 6 
 //p_1 is period 1, p_2 is period 2 in no. of iterations 
 float** filterMARP(int** A, float* x, float e, int max_iterations, float a, int p_1, int p_2, int size){
@@ -42,7 +40,7 @@ float** filterMARP(int** A, float* x, float e, int max_iterations, float a, int 
 		if(count%p_1==0){
 			N = N_new; //might not be needed
 			C = C_new;
-			detect_Converged(N_new, C_new, x_new, x, e); //sinthiki stin prwti selida toy prwtou kefalaiou
+			detect_Converged(N_new, C_new, x_new, x, e, size); //sinthiki stin prwti selida toy prwtou kefalaiou
 			filterA(A, Ann, Acn, C_new, N_new, size);             //
 			y =  compy(Acn, x, size);//Acn*x ;
 			x_c = filterx(x_new, C, size);
@@ -53,6 +51,22 @@ float** filterMARP(int** A, float* x, float e, int max_iterations, float a, int 
 		x = x_new;
 	}
 	return x_new;
+}
+
+void detect_Converged(int* N_new, int* C_new, float* x_new, float* x, float e, int size){
+	int i;
+	for( i=0; i<size; i++){
+		if((norm(x_new[i] - x[i])/norm(x[i]))<e){ // 10 ^ -3
+			//converged
+			N_new[i] = 0;
+			C_new[i] = 1;
+		}
+		else{
+			N_new[i] = 1;
+			C_new[i] = 0;
+		}
+	}
+	return;
 }
 
 float* compy(int** Acn, float* x, int size){ //Acn*x  pollaplasiasmos
@@ -83,7 +97,19 @@ void filterA(int** A, int** Ann, int** Acn, int* C_new, int* N_new, int size){
 	}
 	
 	
-	//Acn part
+	//Acn part: pages that have converged to pages that haven't 
+	// assuming A is column - based transition matrix (since it was transposed)
+	
+	for(i=0; i<size; i++){
+		for(j=0; j<size ; j++){
+			if(C_new[j] == 1 && N_new[i] == 1){
+				Acn[i][j] = A[i][j];
+			}
+			else{
+				Acn[i][j] = 0;
+			}
+		}
+	}
 }
 
 float* filterx(float* xnew, int* C_new, int size){
@@ -134,90 +160,3 @@ void gauss_Seidel(float* x, float* x_new, int** Ann, int** Acn, float* x_c, floa
 	}
 
 }
-
-/*#include <stdio.h> 
-#include <stdlib.h>
-
-
-void main(){
-	printf("Hello I am maria \n");
-	
-	//Read from file of adjacency matrix
-	FILE *adjm;
-	
-	int x;
-	adjm = fopen("adj_matrix.txt", "r+");
-	if(!adjm){
-		printf("Error opening file \n");
-		exit(0);
-	}
-	
-	//Read dimensions of file (square)
-	int m, count=0;
-	while((m=fgetc(adjm))) {
-		// break if end of file 
-		if(m == EOF) break;
-		// otherwise add one to the count of that particular character 
-		if(m=='\n'){
-			count+=1;
-		}
-    }
-	printf("Line count of matrix is %d \n", count);
-	int d = count;
-	int i,j;
-	
-	// Put values in matrix A
-	int** A = malloc(d*sizeof(int *));
-	for( i=0; i<d ; i++){
-		A[i] = malloc(d*sizeof(int));
-	}
-	for( i=0; i<d ; i++){
-		for(j=0 ; j<d; j++){
-			if(!fscanf(adjm, "%d ", &A[i][j])){
-				break;
-			}
-			//printf("A[%d][%d] = %d", i , j, A[i][j]);
-		}
-	}
-	fclose(adjm);
-	printf(" First val is %d Last val is %d \n", A[0][0], A[d-1][d-1]);
-	
-	//Make A appropriate for the algorithm
-	// no page has outdegree 0, using uniform probability 1/n, no personalization
-	
-	int* flag;
-	flag = malloc(d*sizeof(int));
-	for(i=0; i<d ; i++){
-		flag[i] = 0;
-	}
-	for( i=0; i<d ; i++){
-		for(j=0 ; j<d; j++){
-			if(A[i][j]!=0){
-				flag[i]=1;
-			}
-		}
-		if(flag[i] == 1){
-			for(j=0 ; j<d; j++){
-				A[i][j] = 1;     
-			}
-		}
-		printf("A[%d][%d] = %d", i , j, A[i][j]);
-	}
-	
-	//Change to transpose of matrix
-	// Rows become columns
-	
-	int **AT = malloc(d*sizeof(int *));
-	for( i=0; i<d ; i++){
-		AT[i] = malloc(d*sizeof(int));
-	}
-	
-	for( i=0; i<d ; i++){
-		for(j=0 ; j<d; j++){
-			AT[j][i] = A[i][j];
-		}
-	}
-
-}
-
-*/
