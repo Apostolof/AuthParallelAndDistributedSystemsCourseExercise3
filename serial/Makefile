@@ -5,14 +5,15 @@ SHELL := /bin/bash
 
 CC = gcc
 RM = rm -f
-CFLAGS=-O0 -g -I.
+CFLAGS_DEBUG=-O0 -g -I.
+CFLAGS=-O3 -I.
 OBJ=serial_gs_pagerank.o serial_gs_pagerank_functions.o
 DEPS=serial_gs_pagerank_functions.h
 
 # ==========================================
 # TARGETS
 
-EXECUTABLES = pagerank
+EXECUTABLES = pagerank.out
 
 .PHONY: all clean
 

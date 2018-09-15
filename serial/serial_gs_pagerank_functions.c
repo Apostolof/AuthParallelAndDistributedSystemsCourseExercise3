@@ -1,32 +1,210 @@
 #include "serial_gs_pagerank_functions.h"
 
-const char *CONVERGENCE_ARGUMENT = "-c";
-const char *MAX_ITERATIONS_ARGUMENT = "-m";
-const char *DAMPING_FACTOR_ARGUMENT = "-a";
-const char *VERBAL_OUTPUT_ARGUMENT = "-v";
+const char *ARGUMENT_CONVERGENCE_TOLERANCE = "-c";
+const char *ARGUMENT_MAX_ITERATIONS = "-m";
+const char *ARGUMENT_DAMPING_FACTOR = "-a";
+const char *ARGUMENT_VERBAL_OUTPUT = "-v";
+const char *ARGUMENT_OUTPUT_HISTORY = "-h";
+const char *ARGUMENT_OUTPUT_FILENAME = "-o";
+
 const int NUMERICAL_BASE = 10;
+char *DEFAULT_OUTPUT_FILENAME = "pagerank_output";
 
-void validUsage(char *programName) {
-	printf("%s [-c convergence] [-m max_iterations] [-a alpha] [-v] <graph_file>\
-		\n-c convergence\
-		\n\tthe convergence criterion\
-		\n-m max_iterations\
-		\n\tmaximum number of iterations to perform\
-		\n-a alpha\
-		\n\tthe damping factor\
-		\n-v enable verbal output\
-		\n", programName);
-	exit(EXIT_FAILURE);
-}
+// ==================== PAGERANK ====================
 
-int checkIncrement(int previousIndex, int maxIndex, char *programName) {
-	if (previousIndex == maxIndex) {
-		validUsage(programName);
-		exit(EXIT_FAILURE);
+int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters parameters) {
+	int iterations = 0;
+	double delta,
+	*vectorDifference = (double *) malloc(parameters.numberOfPages * sizeof(double)),
+	*previousPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double));
+
+	if (parameters.verbose) {
+		printf("\n----- Starting iterations -----\n");
 	}
-	return ++previousIndex;
+
+	do {
+		memcpy(previousPagerankVector, *pagerankVector, parameters.numberOfPages * sizeof(double));
+
+		matrixVectorMultiplication(transitionMatrix, previousPagerankVector,
+			pagerankVector, parameters.numberOfPages, parameters.dampingFactor);
+
+		if (parameters.history) {
+			savePagerankToFile(parameters.outputFilename, iterations != 0,
+				*pagerankVector, parameters.numberOfPages);
+		}
+
+		for (int i=0; i<parameters.numberOfPages; ++i) {
+			vectorDifference[i] = (*pagerankVector)[i] - previousPagerankVector[i];
+		}
+		delta = vectorNorm(vectorDifference, parameters.numberOfPages);
+
+		++iterations;
+		printf("Iteration %d: delta = %f\n", iterations, delta);
+	} while (delta > parameters.convergenceCriterion &&
+		(parameters.maxIterations == 0 || iterations < parameters.maxIterations));
+
+	if (!parameters.history) {
+		savePagerankToFile(parameters.outputFilename, false, *pagerankVector,
+			parameters.numberOfPages);
+	}
+
+	return iterations;
 }
 
+// ==================== INITIALIZATION ====================
+
+/*
+ * initialize allocates required memory for arrays, reads the web graph from the
+ * from the file and creates the initial transition probability distribution
+ * matrix.
+*/
+void initialize(int ***directedWebGraph, double ***transitionMatrix,
+	double **pagerankVector, Parameters *parameters) {
+
+	// Reads web graph from file
+	if ((*parameters).verbose) {
+		printf("----- Reading graph from file -----\n");
+	}
+	readGraphFromFile(directedWebGraph, parameters);
+
+	// Outputs the algorithm parameters to the console
+	if ((*parameters).verbose) {
+		printf("\n----- Running with parameters -----\
+			\nNumber of pages: %d", (*parameters).numberOfPages);
+		if (!(*parameters).maxIterations) {
+			printf("\nMaximum number of iterations: inf");
+		} else {
+			printf("\nMaximum number of iterations: %d", (*parameters).maxIterations);
+		}
+		printf("\nConvergence criterion: %f\
+			\nDamping factor: %f\
+			\nGraph filename: %s\n", (*parameters).convergenceCriterion,
+			(*parameters).dampingFactor, (*parameters).graphFilename);
+	}
+
+	// Allocates memory for the pagerank vector
+	(*pagerankVector) = (double *) malloc((*parameters).numberOfPages * sizeof(double));
+	double webUniformProbability = 1. / (*parameters).numberOfPages;
+	for (int i=0; i<(*parameters).numberOfPages; ++i) {
+		(*pagerankVector)[i] = webUniformProbability;
+	}
+
+	// Generates the initial transition matrix (matrix P).
+	generateNormalizedTransitionMatrix(transitionMatrix, *directedWebGraph, *parameters);
+	// Transposes the transition matrix (P^T).
+	transposeMatrix(transitionMatrix, (*parameters).numberOfPages, (*parameters).numberOfPages);
+}
+
+/*
+ * generateNormalizedTransitionMatrix generates the normalized transition matrix
+ * from the graph data (matrix P').
+*/
+void generateNormalizedTransitionMatrix(double ***transitionMatrix,
+	int **directedWebGraph, Parameters parameters) {
+	// Allocates memory for the transitionMatrix rows
+	(*transitionMatrix) = (double **) malloc(parameters.numberOfPages * sizeof(double *));
+
+	for (int i=0; i<parameters.numberOfPages; ++i) {
+		// Allocates memory for this row's columns
+		(*transitionMatrix)[i] = (double *) malloc(parameters.numberOfPages * sizeof(double));
+
+		// Calculates the outdegree of this page
+		int pageOutdegree = 0;
+		for (int j=0; j<parameters.numberOfPages; ++j) {
+			pageOutdegree += directedWebGraph[i][j];
+		}
+
+		// Populates this row of the transition matrix
+		if (pageOutdegree != 0) {
+			// Calculates the uniform probability once.
+			double pageUniformProbability = 1. / pageOutdegree;
+
+			for (int j=0; j<parameters.numberOfPages; ++j) {
+				if (directedWebGraph[i][j] == 1){
+					(*transitionMatrix)[i][j] = pageUniformProbability;
+				} else {
+					(*transitionMatrix)[i][j] = 0;
+				}
+			}
+		} else {
+			for (int j=0; j<parameters.numberOfPages; ++j) {
+				(*transitionMatrix)[i][j] = 0;
+			}
+		}
+	}
+}
+
+// ==================== MATH UTILS ====================
+
+/*
+ * matrixVectorMultiplication calculates the product of the multiplication
+ * between a matrix and the a vector in a cheap way.
+*/
+void matrixVectorMultiplication(double ***matrix, double *vector,
+	double **product, int vectorSize, double dampingFactor) {
+	double webUniformProbability = 1. / vectorSize;
+
+	for (int i=0; i<vectorSize; ++i) {
+		double sum = 0;
+
+		for (int j=0; j<vectorSize; ++j) {
+			sum += (*matrix)[i][j] * vector[j];
+		}
+		(*product)[i] = dampingFactor * sum;
+	}
+
+	double normDifference = vectorNorm(vector, vectorSize) -
+	vectorNorm((*product), vectorSize);
+
+	for (int i=0; i<vectorSize; ++i) {
+		(*product)[i] += normDifference * webUniformProbability;
+	}
+}
+
+/*
+ * vectorNorm calculates the first norm of a vector.
+*/
+double vectorNorm(double *vector, int vectorSize) {
+	double norm = 0.;
+
+	for (int i=0; i<vectorSize; ++i) {
+		norm += fabs(vector[i]);
+	}
+
+	return norm;
+}
+
+/*
+ * transposeMatrix transposes the matrix passed (by reference) in the arguments.
+*/
+void transposeMatrix(double ***matrix, int rows, int columns) {
+	// Transposes the matrix
+	// Rows become columns and vice versa
+
+	double **tempArray = (double **) malloc(columns * sizeof(double *));
+	for (int i=0; i<columns; ++i) {
+		tempArray[i] = malloc(rows * sizeof(double));
+
+		for (int j=0; j<rows; ++j) {
+			tempArray[i][j] = (*matrix)[j][i];
+		}
+	}
+
+	// TODO free memory
+
+	//double **pointerToFreeMemoryLater = *matrix;
+	*matrix = tempArray;
+	/*for (int i=0; i<rows; ++i) {
+		free(pointerToFreeMemoryLater[i]);
+	}
+	free(pointerToFreeMemoryLater);*/
+}
+
+// ==================== PROGRAM INPUT AND OUTPUT UTILS ====================
+
+/*
+ * parseArguments parses the command line arguments given by the user.
+*/
 void parseArguments(int argumentCount, char **argumentVector, Parameters *parameters) {
 	if (argumentCount < 2 || argumentCount > 10) {
 		validUsage(argumentVector[0]);
@@ -37,12 +215,14 @@ void parseArguments(int argumentCount, char **argumentVector, Parameters *parame
 	(*parameters).convergenceCriterion = 1;
 	(*parameters).dampingFactor = 0.85;
 	(*parameters).verbose = false;
+	(*parameters).history = false;
+	(*parameters).outputFilename = DEFAULT_OUTPUT_FILENAME;
 
 	char *endPointer;
 	int argumentIndex = 1;
 
 	while (argumentIndex < argumentCount) {
-		if (!strcmp(argumentVector[argumentIndex], CONVERGENCE_ARGUMENT)) {
+		if (!strcmp(argumentVector[argumentIndex], ARGUMENT_CONVERGENCE_TOLERANCE)) {
 			argumentIndex = checkIncrement(argumentIndex, argumentCount, argumentVector[0]);
 
 			double convergenceInput = strtod(argumentVector[argumentIndex], &endPointer);
@@ -51,7 +231,7 @@ void parseArguments(int argumentCount, char **argumentVector, Parameters *parame
 				exit(EXIT_FAILURE);
 			}
 			(*parameters).convergenceCriterion = convergenceInput;
-		} else if (!strcmp(argumentVector[argumentIndex], MAX_ITERATIONS_ARGUMENT)) {
+		} else if (!strcmp(argumentVector[argumentIndex], ARGUMENT_MAX_ITERATIONS)) {
 			argumentIndex = checkIncrement(argumentIndex, argumentCount, argumentVector[0]);
 
 			size_t iterationsInput = strtol(argumentVector[argumentIndex], &endPointer, NUMERICAL_BASE);
@@ -60,7 +240,7 @@ void parseArguments(int argumentCount, char **argumentVector, Parameters *parame
 				exit(EXIT_FAILURE);
 			}
 			(*parameters).maxIterations = iterationsInput;
-		} else if (!strcmp(argumentVector[argumentIndex], DAMPING_FACTOR_ARGUMENT)) {
+		} else if (!strcmp(argumentVector[argumentIndex], ARGUMENT_DAMPING_FACTOR)) {
 			argumentIndex = checkIncrement(argumentIndex, argumentCount, argumentVector[0]);
 
 			double alphaInput = strtod(argumentVector[argumentIndex], &endPointer);
@@ -69,8 +249,18 @@ void parseArguments(int argumentCount, char **argumentVector, Parameters *parame
 				exit(EXIT_FAILURE);
 			}
 			(*parameters).dampingFactor = alphaInput;
-		} else if (!strcmp(argumentVector[argumentIndex], VERBAL_OUTPUT_ARGUMENT)) {
+		} else if (!strcmp(argumentVector[argumentIndex], ARGUMENT_VERBAL_OUTPUT)) {
 			(*parameters).verbose = true;
+		} else if (!strcmp(argumentVector[argumentIndex], ARGUMENT_OUTPUT_HISTORY)) {
+			(*parameters).history = true;
+		} else if (!strcmp(argumentVector[argumentIndex], ARGUMENT_OUTPUT_FILENAME)) {
+			argumentIndex = checkIncrement(argumentIndex, argumentCount, argumentVector[0]);
+
+			if (fopen(argumentVector[argumentIndex], "w") == NULL) {
+				printf("Invalid output filename. Reverting to default.\n");
+				continue;
+			}
+			(*parameters).outputFilename = argumentVector[argumentIndex];
 		} else if (argumentIndex == argumentCount - 1) {
 			(*parameters).graphFilename = argumentVector[argumentIndex];
 		} else {
@@ -81,6 +271,10 @@ void parseArguments(int argumentCount, char **argumentVector, Parameters *parame
 	}
 }
 
+/*
+ * readGraphFromFile loads the file supplied in the command line arguments to an
+ * array (directedWebGraph) that represents the graph.
+*/
 void readGraphFromFile(int ***directedWebGraph, Parameters *parameters) {
 	FILE *graphFile;
 
@@ -103,11 +297,11 @@ void readGraphFromFile(int ***directedWebGraph, Parameters *parameters) {
 	}
 
 	if ((*parameters).verbose) {
-		printf("Line count of file is %d \n", numberOfLines);
+		printf("Line count of file is %d \n", numberOfLines + 1);
 	}
 
 	// Each line of the file represents one page of the graph
-	(*parameters).numberOfPages = numberOfLines;
+	(*parameters).numberOfPages = numberOfLines + 1;
 	rewind(graphFile);
 
 	// Allocates memory and loads values into directedWebGraph (matrix A)
@@ -122,165 +316,62 @@ void readGraphFromFile(int ***directedWebGraph, Parameters *parameters) {
 			if (!fscanf(graphFile, "%d ", &(*directedWebGraph)[i][j])) {
 				break;
 			}
-			//printf("directedWebGraph[%d][%d] = %d", i , j, (*directedWebGraph)[i][j]);
 		}
 	}
 
 	fclose(graphFile);
 }
 
-void generateNormalizedTransitionMatrix(double ***transitionMatrix,
-	int **directedWebGraph, Parameters parameters) {
-	// Allocates memory for the transitionMatrix rows
-	(*transitionMatrix) = (double **) malloc(parameters.numberOfPages * sizeof(double *));
-
-	for (int i=0; i<parameters.numberOfPages; ++i) {
-		// Allocates memory for this row's columns
-		(*transitionMatrix)[i] = (double *) malloc(parameters.numberOfPages * sizeof(double));
-
-		int pageOutdegree = 0;
-		//Calculates the outdegree of this page
-		for (int j=0; j<parameters.numberOfPages; ++j) {
-			pageOutdegree += directedWebGraph[i][j];
-		}
-		for (int j=0; j<parameters.numberOfPages; ++j) {
-			if (pageOutdegree == 0) {
-				// Introduces random jumps from dangling nodes (P' = P + D)
-				// This makes sure that there are no pages with zero outdegree.
-				(*transitionMatrix)[i][j] = 1. / parameters.numberOfPages;
-			} else {
-				(*transitionMatrix)[i][j] = 1. / pageOutdegree;
-			}
-		}
-	}
+/*
+ * validUsage outputs a message to the console that informs the user of the
+ * correct (valid) way to use the program.
+*/
+void validUsage(char *programName) {
+	printf("%s [-c convergence_criterion] [-m max_iterations] [-a alpha] [-v] [-h] [-o output_filename] <graph_file>\
+		\n-c convergence_criterion\
+		\n\tthe convergence tolerance criterion\
+		\n-m max_iterations\
+		\n\tmaximum number of iterations to perform\
+		\n-a alpha\
+		\n\tthe damping factor\
+		\n-v enable verbal output\
+		\n-h enable history output to file\
+		\n-o output_filename\
+		\n\tfilename and path for the output\
+		\n", programName);
+	exit(EXIT_FAILURE);
 }
 
-void makeIrreducible(double ***transitionMatrix, Parameters parameters) {
-	// Manipulates the values of transitionMatrix to make it irreducible. A
-	// uniform probability (1/number_of_pages) and no personalization are used
-	// here.
-
-	// Introduces teleportation (P'' = cP' + (1 - c)E)
-	for (int i=0; i<parameters.numberOfPages; ++i) {
-		for (int j=0; j<parameters.numberOfPages; ++j) {
-			(*transitionMatrix)[i][j] =
-			parameters.dampingFactor *(*transitionMatrix)[i][j] +
-			(1 - parameters.dampingFactor) / parameters.numberOfPages;
-		}
+/*
+ * checkIncrement is a helper function for parseArguments function.
+*/
+int checkIncrement(int previousIndex, int maxIndex, char *programName) {
+	if (previousIndex == maxIndex) {
+		validUsage(programName);
+		exit(EXIT_FAILURE);
 	}
+	return ++previousIndex;
 }
 
-void transposeMatrix(double ***matrix, int rows, int columns) {
-	// Transposes the matrix
-	// Rows become columns and vice versa
+void savePagerankToFile(char *filename, bool append, double *pagerankVector,
+	int vectorSize) {
+	FILE *outputFile;
 
-	double **tempArray = (double **) malloc(rows * sizeof(double *));
-	for (int i=0; i<rows; ++i) {
-		tempArray[i] = malloc(columns * sizeof(double));
-
-		for (int j=0; j<columns; ++j) {
-			tempArray[i][j] = (*matrix)[j][i];
-		}
+	if (append) {
+		outputFile = fopen(filename, "a");
+	} else {
+		outputFile = fopen(filename, "w");
 	}
 
-	//double **pointerToFreeMemoryLater = *matrix;
-	matrix = &tempArray;
-	/*for (int i=0; i<rows; ++i) {
-		free(pointerToFreeMemoryLater[i]);
+	if (outputFile == NULL) {
+		printf("Error while opening the output file.\n");
+		return;
 	}
-	free(pointerToFreeMemoryLater);*/
-}
-
-void initialize(int ***directedWebGraph, double ***transitionMatrix,
-	double **pagerankVector, Parameters *parameters) {
-
-	if ((*parameters).verbose) {
-		printf("----- Reading graph from file -----\n");
-	}
-	readGraphFromFile(directedWebGraph, parameters);
-
-	if ((*parameters).verbose) {
-		printf("\n----- Running with parameters -----\
-			\nNumber of pages: %d", (*parameters).numberOfPages);
-		if (!(*parameters).maxIterations) {
-			printf("\nMaximum number of iterations: inf");
-		} else {
-			printf("\nMaximum number of iterations: %d", (*parameters).maxIterations);
-		}
-		printf("\nConvergence criterion: %f\
-			\nDamping factor: %f\
-			\nGraph filename: %s\n", (*parameters).convergenceCriterion,
-			(*parameters).dampingFactor, (*parameters).graphFilename);
-	}
-
-	// Allocates memory for the pagerank vector
-	(*pagerankVector) = (double *) malloc((*parameters).numberOfPages * sizeof(double));
-	for (int i=0; i<(*parameters).numberOfPages; ++i) {
-		(*pagerankVector)[i] = 1. / (*parameters).numberOfPages;
-	}
-
-	generateNormalizedTransitionMatrix(transitionMatrix, *directedWebGraph, *parameters);
-	makeIrreducible(transitionMatrix, *parameters);
-	transposeMatrix(transitionMatrix, (*parameters).numberOfPages, (*parameters).numberOfPages);
-}
-
-double vectorFirstNorm(double *vector, int vectorSize) {
-	double norm = 0;
 
 	for (int i=0; i<vectorSize; ++i) {
-		norm += vector[i];
+		fprintf(outputFile, "%f ", pagerankVector[i]);
 	}
+	fprintf(outputFile, "\n");
 
-	return norm;
-}
-
-void nextProbabilityDistribution(double ***transitionMatrix, double *previousPagerankVector,
-	double **newPagerankVector, Parameters parameters) {
-
-	transposeMatrix(transitionMatrix, parameters.numberOfPages, parameters.numberOfPages);
-	for (int i=0; i<parameters.numberOfPages; ++i) {
-		double sum = 0;
-
-		for (int j=0; j<parameters.numberOfPages; ++j) {
-			sum += (*transitionMatrix)[i][j] * previousPagerankVector[j];
-		}
-		(*newPagerankVector)[i] = parameters.dampingFactor * sum;
-	}
-
-	double normDifference = vectorFirstNorm(previousPagerankVector, parameters.numberOfPages) -
-	vectorFirstNorm((*newPagerankVector), parameters.numberOfPages);
-
-	for (int i=0; i<parameters.numberOfPages; ++i) {
-		(*newPagerankVector)[i] += normDifference / parameters.numberOfPages;
-	}
-
-	transposeMatrix(transitionMatrix, parameters.numberOfPages, parameters.numberOfPages);
-}
-
-int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters parameters) {
-	int iterations = 0;
-	double delta,
-	*vectorDifference = (double *) malloc(parameters.numberOfPages * sizeof(double)),
-	*previousPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double));
-
-	if (parameters.verbose) {
-		printf("\n----- Starting iterations -----\n");
-	}
-
-	do {
-		memcpy(previousPagerankVector, *pagerankVector, parameters.numberOfPages * sizeof(double));
-
-		nextProbabilityDistribution(transitionMatrix, previousPagerankVector, pagerankVector, parameters);
-
-		for (int i=0; i<parameters.numberOfPages; ++i) {
-			vectorDifference[i] = (*pagerankVector)[i] - previousPagerankVector[i];
-		}
-		delta = vectorFirstNorm(vectorDifference, parameters.numberOfPages);
-
-		++iterations;
-		printf("Iteration %d: delta = %f\n", iterations, delta);
-	} while (delta > parameters.convergenceCriterion &&
-		(parameters.maxIterations != 0 || iterations < parameters.maxIterations));
-
-	return iterations;
+	fclose(outputFile);
 }

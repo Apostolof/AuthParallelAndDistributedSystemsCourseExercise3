@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
 
 	initialize(&directedWebGraph, &transitionMatrix, &pagerankVector, &parameters);
 
-	//Starts wall-clock timer
+	// Starts wall-clock timer
 	gettimeofday (&startwtime, NULL);
 
 	int iterations = pagerank(&transitionMatrix, &pagerankVector, parameters);
@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
 			\nTotal iterations = %d\n", iterations);
 	}
 
-	//Stops wall-clock timer
+	// Stops wall-clock timer
 	gettimeofday (&endwtime, NULL);
 	double seq_time = (double)((endwtime.tv_usec - startwtime.tv_usec)/1.0e6 +
 		endwtime.tv_sec - startwtime.tv_sec);
