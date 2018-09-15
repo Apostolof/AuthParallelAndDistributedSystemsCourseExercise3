@@ -53,3 +53,5 @@ dkms.conf
 
 #Output files
 *_output
+
+adj_matrix

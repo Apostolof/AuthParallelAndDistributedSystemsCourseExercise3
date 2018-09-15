@@ -75,7 +75,8 @@ double vectorNorm(double *vector, int vectorSize);
 // Function matrixVectorMultiplication calculates the product of the
 // multiplication between a matrix and the a vector.
 void matrixVectorMultiplication(double ***matrix, double *vector,
-	double **product, int vectorSize, double dampingFactor);
+	double *convergedPagerankVector, double **product, int vectorSize,
+	double dampingFactor);
 
 // Function pagerank iteratively calculates the pagerank of each page until
 // either the convergence criterion is met or the maximum number of iterations

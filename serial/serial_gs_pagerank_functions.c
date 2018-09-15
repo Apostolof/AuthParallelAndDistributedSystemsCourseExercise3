@@ -16,7 +16,12 @@ int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters par
 	int iterations = 0;
 	double delta,
 	*vectorDifference = (double *) malloc(parameters.numberOfPages * sizeof(double)),
-	*previousPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double));
+	*previousPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double)),
+	*convergedPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double));
+
+	for (int i=0; i<parameters.numberOfPages; ++i) {
+		convergedPagerankVector[i] = 0;
+	}
 
 	if (parameters.verbose) {
 		printf("\n----- Starting iterations -----\n");
@@ -25,7 +30,7 @@ int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters par
 	do {
 		memcpy(previousPagerankVector, *pagerankVector, parameters.numberOfPages * sizeof(double));
 
-		matrixVectorMultiplication(transitionMatrix, previousPagerankVector,
+		matrixVectorMultiplication(transitionMatrix, previousPagerankVector, convergedPagerankVector,
 			pagerankVector, parameters.numberOfPages, parameters.dampingFactor);
 
 		if (parameters.history) {
@@ -37,6 +42,18 @@ int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters par
 			vectorDifference[i] = (*pagerankVector)[i] - previousPagerankVector[i];
 		}
 		delta = vectorNorm(vectorDifference, parameters.numberOfPages);
+
+		if (!iterations % 5) {
+			for (int i=0; i<parameters.numberOfPages; ++i) {
+				double temp = fabs((*pagerankVector)[i] - previousPagerankVector[i]) / fabs(previousPagerankVector[i]);
+				if (temp < parameters.convergenceCriterion){
+					convergedPagerankVector[i] = (*pagerankVector)[i];
+					for (int j=0; j<parameters.numberOfPages; ++j){
+						(*transitionMatrix)[i][j] = 0;
+					}
+				}
+			}
+		}
 
 		++iterations;
 		printf("Iteration %d: delta = %f\n", iterations, delta);
@@ -141,7 +158,8 @@ void generateNormalizedTransitionMatrix(double ***transitionMatrix,
  * between a matrix and the a vector in a cheap way.
 */
 void matrixVectorMultiplication(double ***matrix, double *vector,
-	double **product, int vectorSize, double dampingFactor) {
+	double *convergedPagerankVector, double **product, int vectorSize,
+	double dampingFactor) {
 	double webUniformProbability = 1. / vectorSize;
 
 	for (int i=0; i<vectorSize; ++i) {
@@ -150,7 +168,7 @@ void matrixVectorMultiplication(double ***matrix, double *vector,
 		for (int j=0; j<vectorSize; ++j) {
 			sum += (*matrix)[i][j] * vector[j];
 		}
-		(*product)[i] = dampingFactor * sum;
+		(*product)[i] = dampingFactor * sum + convergedPagerankVector[i];
 	}
 
 	double normDifference = vectorNorm(vector, vectorSize) -
