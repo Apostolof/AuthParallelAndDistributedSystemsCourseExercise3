@@ -17,10 +17,20 @@ int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters par
 	double delta,
 	*vectorDifference = (double *) malloc(parameters.numberOfPages * sizeof(double)),
 	*previousPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double)),
-	*convergedPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double));
+	*convergedPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double)),
+	**linksFromConvergedPages = (double **) malloc(parameters.numberOfPages * sizeof(double *)),
+	*linksFromConvergedPagesPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double));
+	bool *converganceMatrix = (bool *) malloc(parameters.numberOfPages * sizeof(bool));
 
 	for (int i=0; i<parameters.numberOfPages; ++i) {
 		convergedPagerankVector[i] = 0;
+		converganceMatrix[i] = false;
+		linksFromConvergedPagesPagerankVector[i] = 0;
+
+		linksFromConvergedPages[i] = (double *) malloc(parameters.numberOfPages * sizeof(double));
+		for (int j=0; j<parameters.numberOfPages; ++j) {
+			linksFromConvergedPages[i][j] = 0;
+		}
 	}
 
 	if (parameters.verbose) {
@@ -30,7 +40,8 @@ int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters par
 	do {
 		memcpy(previousPagerankVector, *pagerankVector, parameters.numberOfPages * sizeof(double));
 
-		matrixVectorMultiplication(transitionMatrix, previousPagerankVector, convergedPagerankVector,
+		matrixVectorMultiplication(*transitionMatrix, previousPagerankVector,
+			linksFromConvergedPagesPagerankVector, convergedPagerankVector,
 			pagerankVector, parameters.numberOfPages, parameters.dampingFactor);
 
 		if (parameters.history) {
@@ -43,14 +54,32 @@ int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters par
 		}
 		delta = vectorNorm(vectorDifference, parameters.numberOfPages);
 
-		if (!iterations % 5) {
+		if (!iterations % 10) {
 			for (int i=0; i<parameters.numberOfPages; ++i) {
 				double temp = fabs((*pagerankVector)[i] - previousPagerankVector[i]) / fabs(previousPagerankVector[i]);
 				if (temp < parameters.convergenceCriterion){
+					converganceMatrix[i] = true;
 					convergedPagerankVector[i] = (*pagerankVector)[i];
+				}
+			}
+
+			for (int i=0; i<parameters.numberOfPages; ++i) {
+				if (converganceMatrix[i] == true) {
 					for (int j=0; j<parameters.numberOfPages; ++j){
+						if (converganceMatrix[j] == false){
+							linksFromConvergedPages[i][j] = (*transitionMatrix)[i][j];
+						}
+						// Zeros out CN and CC sub-matrices
 						(*transitionMatrix)[i][j] = 0;
+						// Zeros out NC sub-matrix
+						(*transitionMatrix)[j][i] = 0;
 					}
+
+					double sum = 0;
+					for (int j=0; j<parameters.numberOfPages; ++j) {
+						sum += linksFromConvergedPages[i][j] * (*pagerankVector)[j];
+					}
+					linksFromConvergedPagesPagerankVector[i] = sum;
 				}
 			}
 		}
@@ -157,25 +186,26 @@ void generateNormalizedTransitionMatrix(double ***transitionMatrix,
  * matrixVectorMultiplication calculates the product of the multiplication
  * between a matrix and the a vector in a cheap way.
 */
-void matrixVectorMultiplication(double ***matrix, double *vector,
-	double *convergedPagerankVector, double **product, int vectorSize,
-	double dampingFactor) {
+void matrixVectorMultiplication(double **transitionMatrix, double *previousPagerankVector,
+	double *linksFromConvergedPagesPagerankVector, double *convergedPagerankVector,
+	double **pagerankVector, int vectorSize, double dampingFactor) {
 	double webUniformProbability = 1. / vectorSize;
 
 	for (int i=0; i<vectorSize; ++i) {
 		double sum = 0;
 
 		for (int j=0; j<vectorSize; ++j) {
-			sum += (*matrix)[i][j] * vector[j];
+			sum += transitionMatrix[i][j] * previousPagerankVector[j];
 		}
-		(*product)[i] = dampingFactor * sum + convergedPagerankVector[i];
+		(*pagerankVector)[i] = dampingFactor * sum;
 	}
 
-	double normDifference = vectorNorm(vector, vectorSize) -
-	vectorNorm((*product), vectorSize);
+	double normDifference = vectorNorm(previousPagerankVector, vectorSize) -
+	vectorNorm(*pagerankVector, vectorSize);
 
 	for (int i=0; i<vectorSize; ++i) {
-		(*product)[i] += normDifference * webUniformProbability;
+		(*pagerankVector)[i] += normDifference * webUniformProbability +
+		linksFromConvergedPagesPagerankVector[i] + convergedPagerankVector[i];
 	}
 }
 
