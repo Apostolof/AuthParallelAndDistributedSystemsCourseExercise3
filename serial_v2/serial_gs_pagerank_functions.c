@@ -208,7 +208,7 @@ void matrixVectorMultiplication(int **transitionMatrix, double *previousPagerank
 		for (int j=i; j<vectorSize; ++j) {
 			sum2 += transitionMatrix[i][j] * (*pagerankVector)[j];
 		}
-		(*pagerankVector)[i] = dampingFactor * sum1+dampingFactor * sum2+(1-dampingFactor);
+		(*pagerankVector)[i] = dampingFactor * sum1+dampingFactor * sum2;
 	}
 
 	//double normDifference = vectorNorm(previousPagerankVector, vectorSize) -
