@@ -9,10 +9,11 @@ const char *ARGUMENT_OUTPUT_FILENAME = "-o";
 
 const int NUMERICAL_BASE = 10;
 char *DEFAULT_OUTPUT_FILENAME = "pagerank_output";
+const int MAX_PAGE_LINKS_TEXT_SIZE = 4096;
 
 // ==================== PAGERANK ====================
 
-int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters parameters) {
+int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector, Parameters parameters) {
 	int iterations = 0;
 	double delta,
 	*vectorDifference = (double *) malloc(parameters.numberOfPages * sizeof(double)),
@@ -40,9 +41,12 @@ int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters par
 	do {
 		memcpy(previousPagerankVector, *pagerankVector, parameters.numberOfPages * sizeof(double));
 
-		matrixVectorMultiplication(*transitionMatrix, previousPagerankVector,
-			linksFromConvergedPagesPagerankVector, convergedPagerankVector,
+		matrixVectorMultiplication(transitionMatrix, previousPagerankVector,
 			pagerankVector, parameters.numberOfPages, parameters.dampingFactor);
+
+		for (int i=0; i<parameters.numberOfPages; ++i) {
+			(*pagerankVector)[i] += linksFromConvergedPagesPagerankVector[i] + convergedPagerankVector[i];
+		}
 
 		if (parameters.history) {
 			savePagerankToFile(parameters.outputFilename, iterations != 0,
@@ -54,7 +58,7 @@ int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters par
 		}
 		delta = vectorNorm(vectorDifference, parameters.numberOfPages);
 
-		if (!iterations % 10) {
+		if (iterations && !iterations % 10) {
 			for (int i=0; i<parameters.numberOfPages; ++i) {
 				double temp = fabs((*pagerankVector)[i] - previousPagerankVector[i]) / fabs(previousPagerankVector[i]);
 				if (temp < parameters.convergenceCriterion){
@@ -67,12 +71,11 @@ int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters par
 				if (converganceMatrix[i] == true) {
 					for (int j=0; j<parameters.numberOfPages; ++j){
 						if (converganceMatrix[j] == false){
-							linksFromConvergedPages[i][j] = (*transitionMatrix)[i][j];
+							SparseMatrixElement *element = getElement(*transitionMatrix, i, j);
+							linksFromConvergedPages[i][j] = element != NULL ? element->value : 0;
 						}
-						// Zeros out CN and CC sub-matrices
-						(*transitionMatrix)[i][j] = 0;
-						// Zeros out NC sub-matrix
-						(*transitionMatrix)[j][i] = 0;
+						deleteElement(transitionMatrix, i, j);
+						deleteElement(transitionMatrix, j, i);
 					}
 
 					double sum = 0;
@@ -104,14 +107,14 @@ int pagerank(double ***transitionMatrix, double **pagerankVector, Parameters par
  * from the file and creates the initial transition probability distribution
  * matrix.
 */
-void initialize(int ***directedWebGraph, double ***transitionMatrix,
+void initialize(SparseMatrix *transitionMatrix,
 	double **pagerankVector, Parameters *parameters) {
 
 	// Reads web graph from file
 	if ((*parameters).verbose) {
 		printf("----- Reading graph from file -----\n");
 	}
-	readGraphFromFile(directedWebGraph, parameters);
+	generateNormalizedTransitionMatrixFromFile(transitionMatrix, parameters);
 
 	// Outputs the algorithm parameters to the console
 	if ((*parameters).verbose) {
@@ -135,49 +138,8 @@ void initialize(int ***directedWebGraph, double ***transitionMatrix,
 		(*pagerankVector)[i] = webUniformProbability;
 	}
 
-	// Generates the initial transition matrix (matrix P).
-	generateNormalizedTransitionMatrix(transitionMatrix, *directedWebGraph, *parameters);
 	// Transposes the transition matrix (P^T).
-	transposeMatrix(transitionMatrix, (*parameters).numberOfPages, (*parameters).numberOfPages);
-}
-
-/*
- * generateNormalizedTransitionMatrix generates the normalized transition matrix
- * from the graph data (matrix P').
-*/
-void generateNormalizedTransitionMatrix(double ***transitionMatrix,
-	int **directedWebGraph, Parameters parameters) {
-	// Allocates memory for the transitionMatrix rows
-	(*transitionMatrix) = (double **) malloc(parameters.numberOfPages * sizeof(double *));
-
-	for (int i=0; i<parameters.numberOfPages; ++i) {
-		// Allocates memory for this row's columns
-		(*transitionMatrix)[i] = (double *) malloc(parameters.numberOfPages * sizeof(double));
-
-		// Calculates the outdegree of this page
-		int pageOutdegree = 0;
-		for (int j=0; j<parameters.numberOfPages; ++j) {
-			pageOutdegree += directedWebGraph[i][j];
-		}
-
-		// Populates this row of the transition matrix
-		if (pageOutdegree != 0) {
-			// Calculates the uniform probability once.
-			double pageUniformProbability = 1. / pageOutdegree;
-
-			for (int j=0; j<parameters.numberOfPages; ++j) {
-				if (directedWebGraph[i][j] == 1){
-					(*transitionMatrix)[i][j] = pageUniformProbability;
-				} else {
-					(*transitionMatrix)[i][j] = 0;
-				}
-			}
-		} else {
-			for (int j=0; j<parameters.numberOfPages; ++j) {
-				(*transitionMatrix)[i][j] = 0;
-			}
-		}
-	}
+	transposeSparseMatrix(transitionMatrix);
 }
 
 // ==================== MATH UTILS ====================
@@ -186,26 +148,22 @@ void generateNormalizedTransitionMatrix(double ***transitionMatrix,
  * matrixVectorMultiplication calculates the product of the multiplication
  * between a matrix and the a vector in a cheap way.
 */
-void matrixVectorMultiplication(double **transitionMatrix, double *previousPagerankVector,
-	double *linksFromConvergedPagesPagerankVector, double *convergedPagerankVector,
+void matrixVectorMultiplication(SparseMatrix *transitionMatrix, double *previousPagerankVector,
 	double **pagerankVector, int vectorSize, double dampingFactor) {
 	double webUniformProbability = 1. / vectorSize;
 
-	for (int i=0; i<vectorSize; ++i) {
-		double sum = 0;
+	sparseMatrixVectorMultiplication(*transitionMatrix, previousPagerankVector,
+		pagerankVector, vectorSize);
 
-		for (int j=0; j<vectorSize; ++j) {
-			sum += transitionMatrix[i][j] * previousPagerankVector[j];
-		}
-		(*pagerankVector)[i] = dampingFactor * sum;
+	for (int i=0; i<vectorSize; ++i) {
+		(*pagerankVector)[i] = dampingFactor * (*pagerankVector)[i];
 	}
 
 	double normDifference = vectorNorm(previousPagerankVector, vectorSize) -
 	vectorNorm(*pagerankVector, vectorSize);
 
 	for (int i=0; i<vectorSize; ++i) {
-		(*pagerankVector)[i] += normDifference * webUniformProbability +
-		linksFromConvergedPagesPagerankVector[i] + convergedPagerankVector[i];
+		(*pagerankVector)[i] += normDifference * webUniformProbability;
 	}
 }
 
@@ -220,32 +178,6 @@ double vectorNorm(double *vector, int vectorSize) {
 	}
 
 	return norm;
-}
-
-/*
- * transposeMatrix transposes the matrix passed (by reference) in the arguments.
-*/
-void transposeMatrix(double ***matrix, int rows, int columns) {
-	// Transposes the matrix
-	// Rows become columns and vice versa
-
-	double **tempArray = (double **) malloc(columns * sizeof(double *));
-	for (int i=0; i<columns; ++i) {
-		tempArray[i] = malloc(rows * sizeof(double));
-
-		for (int j=0; j<rows; ++j) {
-			tempArray[i][j] = (*matrix)[j][i];
-		}
-	}
-
-	// TODO free memory
-
-	//double **pointerToFreeMemoryLater = *matrix;
-	*matrix = tempArray;
-	/*for (int i=0; i<rows; ++i) {
-		free(pointerToFreeMemoryLater[i]);
-	}
-	free(pointerToFreeMemoryLater);*/
 }
 
 // ==================== PROGRAM INPUT AND OUTPUT UTILS ====================
@@ -323,7 +255,8 @@ void parseArguments(int argumentCount, char **argumentVector, Parameters *parame
  * readGraphFromFile loads the file supplied in the command line arguments to an
  * array (directedWebGraph) that represents the graph.
 */
-void readGraphFromFile(int ***directedWebGraph, Parameters *parameters) {
+void generateNormalizedTransitionMatrixFromFile(SparseMatrix *transitionMatrix,
+	Parameters *parameters){
 	FILE *graphFile;
 
 	// Opens the file for reading
@@ -333,38 +266,71 @@ void readGraphFromFile(int ***directedWebGraph, Parameters *parameters) {
 		exit(EXIT_FAILURE);
 	}
 
-	// Reads the dimensions of the (square) array from the file
-	int readChar, numberOfLines=0;
-	while((readChar = fgetc(graphFile))) {
-		// Breaks if end of file
-		if (readChar == EOF) break;
-		// Otherwise, if the character is a break line, adds one to the count of lines
-		if (readChar == '\n') {
-			++numberOfLines;
+	int pageIndex, count = 0;
+	while (fscanf(graphFile, "%d:", &pageIndex) != EOF) {
+		if (!(pageIndex%51050)) {
+			printf("\t%d\t%d%%\n", pageIndex, ++count);
+		}
+
+		char *restOfLine = malloc(MAX_PAGE_LINKS_TEXT_SIZE);
+		if (!fgets(restOfLine, MAX_PAGE_LINKS_TEXT_SIZE, graphFile)) {
+			exit(EXIT_FAILURE);
+		}
+
+		char *token = strtok(restOfLine, " ");
+
+		while (token != NULL) {
+			if (strcmp(token, "\n") == 0) {
+				//token = strtok (NULL, " ");
+				break;
+			}
+
+			int outLink = atoi(token);
+			if (outLink != -1) {
+				apendElement(transitionMatrix, 1, pageIndex, outLink);
+			}
+			token = strtok (NULL, " ");
 		}
 	}
+	printf("\t100%%\n");
+	printf("number of edges = %d\n", transitionMatrix->elements);
 
-	if ((*parameters).verbose) {
-		printf("Line count of file is %d \n", numberOfLines + 1);
-	}
+	(*parameters).numberOfPages = pageIndex + 1;
 
-	// Each line of the file represents one page of the graph
-	(*parameters).numberOfPages = numberOfLines + 1;
-	rewind(graphFile);
+	int currentRow = transitionMatrix->firstElement->rowIndex;
+	SparseMatrixElement *startElement = transitionMatrix->firstElement;
+	while(true) {
+		int pageOutdegree = 1;
+		SparseMatrixElement *currentElement = startElement->nextElement;
 
-	// Allocates memory and loads values into directedWebGraph (matrix A)
-	// Allocates memory for the rows
-	(*directedWebGraph) = (int **) malloc((*parameters).numberOfPages * sizeof(int *));
-
-	for (int i=0; i<(*parameters).numberOfPages; ++i) {
-		// Allocates memory for the columns of this row
-		(*directedWebGraph)[i] = (int *) malloc((*parameters).numberOfPages * sizeof(int));
-		// Reads values from the file
-		for (int j=0; j<(*parameters).numberOfPages; ++j) {
-			if (!fscanf(graphFile, "%d ", &(*directedWebGraph)[i][j])) {
+		// Calculates current page's outdegree
+		while (currentElement != NULL) {
+			if (currentElement->rowIndex == currentRow) {
+				++pageOutdegree;
+				currentElement = currentElement->nextElement;
+			} else {
 				break;
 			}
 		}
+
+		// Assigns the value 1/outdegree to current page's columns
+		currentElement = startElement;
+		for (int i=0; i<pageOutdegree; ++i) {
+			if (currentElement->rowIndex == currentRow) {
+				currentElement->value = 1. / pageOutdegree;
+				currentElement = currentElement->nextElement;
+			} else {
+				break;
+			}
+		}
+
+		// Reached the last element;
+		if (currentElement == NULL) {
+			break;
+		}
+
+		startElement = currentElement;
+		currentRow = startElement->rowIndex;
 	}
 
 	fclose(graphFile);

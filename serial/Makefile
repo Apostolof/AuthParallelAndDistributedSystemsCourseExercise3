@@ -7,8 +7,8 @@ CC = gcc
 RM = rm -f
 CFLAGS_DEBUG=-O0 -g -I.
 CFLAGS=-O3 -I.
-OBJ=serial_gs_pagerank.o serial_gs_pagerank_functions.o
-DEPS=serial_gs_pagerank_functions.h
+OBJ=serial_gs_pagerank.o serial_gs_pagerank_functions.o sparse_matrix.o
+DEPS=serial_gs_pagerank_functions.h sparse_matrix.h
 
 # ==========================================
 # TARGETS

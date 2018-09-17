@@ -1,18 +1,21 @@
 #include <sys/time.h>
 
 #include "serial_gs_pagerank_functions.h"
+#include "sparse_matrix.h"
 
 struct timeval startwtime, endwtime;
 double seq_time;
 
 int main(int argc, char **argv) {
-	int **directedWebGraph;
-	double **transitionMatrix, *pagerankVector;
+	SparseMatrix transitionMatrix;
+	double *pagerankVector;
 	Parameters parameters;
+
+	transitionMatrix = createSparseMatrix();
 
 	parseArguments(argc, argv, &parameters);
 
-	initialize(&directedWebGraph, &transitionMatrix, &pagerankVector, &parameters);
+	initialize(&transitionMatrix, &pagerankVector, &parameters);
 
 	// Starts wall-clock timer
 	gettimeofday (&startwtime, NULL);
