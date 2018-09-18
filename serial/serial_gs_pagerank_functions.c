@@ -20,8 +20,8 @@ int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector,
 	*vectorDifference = (double *) malloc(parameters.numberOfPages * sizeof(double)),
 	*previousPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double)),
 	*convergedPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double)),
-	**linksFromConvergedPages = (double **) malloc(parameters.numberOfPages * sizeof(double *)),
 	*linksFromConvergedPagesPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double));
+	SparseMatrix linksFromConvergedPages = createSparseMatrix();
 	bool *converganceMatrix = (bool *) malloc(parameters.numberOfPages * sizeof(bool));
 	*convergenceStatus = false;
 
@@ -29,11 +29,6 @@ int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector,
 		convergedPagerankVector[i] = 0;
 		converganceMatrix[i] = false;
 		linksFromConvergedPagesPagerankVector[i] = 0;
-
-		linksFromConvergedPages[i] = (double *) malloc(parameters.numberOfPages * sizeof(double));
-		for (int j=0; j<parameters.numberOfPages; ++j) {
-			linksFromConvergedPages[i][j] = 0;
-		}
 	}
 
 	if (parameters.verbose) {
@@ -63,7 +58,7 @@ int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector,
 			*convergenceStatus = true;
 		}
 
-		if (iterations && !iterations % 10) {
+		if (iterations && (!iterations % 10)) {
 			for (int i=0; i<parameters.numberOfPages; ++i) {
 				double temp = fabs((*pagerankVector)[i] - previousPagerankVector[i]) / fabs(previousPagerankVector[i]);
 				if (temp < parameters.convergenceCriterion){
@@ -77,17 +72,16 @@ int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector,
 					for (int j=0; j<parameters.numberOfPages; ++j){
 						if (converganceMatrix[j] == false){
 							SparseMatrixElement *element = getElement(*transitionMatrix, i, j);
-							linksFromConvergedPages[i][j] = element != NULL ? element->value : 0;
+							if (element != NULL) {
+								apendElement(&linksFromConvergedPages, element->value, i, j);
+							}
 						}
 						deleteElement(transitionMatrix, i, j);
 						deleteElement(transitionMatrix, j, i);
 					}
 
-					double sum = 0;
-					for (int j=0; j<parameters.numberOfPages; ++j) {
-						sum += linksFromConvergedPages[i][j] * (*pagerankVector)[j];
-					}
-					linksFromConvergedPagesPagerankVector[i] = sum;
+					sparseMatrixVectorMultiplication(linksFromConvergedPages, *pagerankVector,
+						&linksFromConvergedPagesPagerankVector, parameters.numberOfPages);
 				}
 			}
 		}
@@ -319,10 +313,9 @@ void generateNormalizedTransitionMatrixFromFile(SparseMatrix *transitionMatrix,
 	}
 
 	if ((*parameters).verbose) {
-		printf("The number of pages is: %d\nThe number of edges is: %d\n",
+		printf("File claims number of pages is: %d\nThe number of edges is: %d\n",
 			numberOfNodes, numberOfEdges);
 	}
-	(*parameters).numberOfPages = numberOfNodes;
 
 	// Skips the fourth line
 	readResult = fgets(buffer, 512, graphFile);
@@ -334,6 +327,7 @@ void generateNormalizedTransitionMatrixFromFile(SparseMatrix *transitionMatrix,
 	printf("SIZE OF STRUCT = %lu Bytes\n", sizeof(SparseMatrixElement));
 
 	int fivePercentIncrements = (int) numberOfEdges/20;
+	int maxPageIndex = 0;
 	fivePercentIncrements = fivePercentIncrements != 0 ? fivePercentIncrements : 1;
 
 	for (int i=0; i<numberOfEdges; i++) {
@@ -352,8 +346,16 @@ void generateNormalizedTransitionMatrixFromFile(SparseMatrix *transitionMatrix,
 			break;
 		}
 
+		if (fileFrom > maxPageIndex) {
+			maxPageIndex = fileFrom;
+		}
 		apendElement(transitionMatrix, 1, fileFrom, fileTo);
 	}
+
+	if ((*parameters).verbose) {
+		printf("Max page index found is: %d\n", maxPageIndex);
+	}
+	(*parameters).numberOfPages = maxPageIndex + 1;
 
 	// Calculates the outdegree of each page and assigns the uniform probability
 	// of transition to the elements of the corresponding row
