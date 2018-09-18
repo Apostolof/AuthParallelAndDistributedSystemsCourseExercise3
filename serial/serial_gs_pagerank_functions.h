@@ -9,6 +9,13 @@
 
 #include "sparse_matrix.h"
 
+#define ANSI_COLOR_RED     "\x1B[31m"
+#define ANSI_COLOR_GREEN   "\x1B[32m"
+#define ANSI_COLOR_YELLOW  "\x1B[33m"
+#define ANSI_COLOR_BLUE    "\x1B[34m"
+#define ANSI_COLOR_CYAN    "\x1B[36m"
+#define ANSI_COLOR_RESET   "\x1B[0m"
+
 /*
  * Constant strings that store the command line options available.
 */
@@ -79,6 +86,7 @@ void matrixVectorMultiplication(SparseMatrix *transitionMatrix,
 // Function pagerank iteratively calculates the pagerank of each page until
 // either the convergence criterion is met or the maximum number of iterations
 // is reached.
-int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector, Parameters parameters);
+int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector,
+	bool *convergenceStatus, Parameters parameters);
 
 #endif	// SERIAL_GS_PAGERANK_FUNCTIONS_H

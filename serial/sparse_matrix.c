@@ -4,6 +4,7 @@ SparseMatrix createSparseMatrix() {
 	SparseMatrix sparseMatrix;
 	sparseMatrix.elements = 0;
 	sparseMatrix.firstElement = NULL;
+	sparseMatrix.lastElement = NULL;
 	return sparseMatrix;
 }
 
@@ -18,14 +19,13 @@ void apendElement(SparseMatrix *sparseMatrix, double value, int row, int column)
 	if (sparseMatrix->firstElement == NULL) {
 		// Sparse matrix is empty, this is the first element
 		sparseMatrix->firstElement = newElement;
+		sparseMatrix->lastElement = newElement;
 	} else {
 		//Gets last element of the matrix
-		SparseMatrixElement *lastElement = sparseMatrix->firstElement;
-		while (lastElement->nextElement != NULL) {
-			lastElement = lastElement->nextElement;
-		}
+		SparseMatrixElement *lastElement = sparseMatrix->lastElement;
 
 		lastElement->nextElement = newElement;
+		sparseMatrix->lastElement = newElement;
 	}
 
 	sparseMatrix->elements = sparseMatrix->elements + 1;
@@ -39,6 +39,7 @@ bool deleteElement(SparseMatrix *sparseMatrix, int row, int column) {
 		// Matrix has one element. Deletes it.
 		free(sparseMatrix->firstElement);
 		sparseMatrix->firstElement = NULL;
+		sparseMatrix->lastElement = NULL;
 		sparseMatrix->elements = sparseMatrix->elements - 1;
 		return true;
 	}
@@ -58,6 +59,9 @@ bool deleteElement(SparseMatrix *sparseMatrix, int row, int column) {
 		SparseMatrixElement *nextElement = currentElement->nextElement;
 		if (nextElement->rowIndex == row && nextElement->columnIndex == column) {
 			currentElement->nextElement = nextElement->nextElement;
+			if (currentElement->nextElement == NULL) {
+				sparseMatrix->lastElement = currentElement;
+			}
 			free(nextElement);
 			sparseMatrix->elements = sparseMatrix->elements - 1;
 			return true;

@@ -15,6 +15,7 @@ typedef struct sparseMatrixElement {
 typedef struct sparseMatrix {
 	int elements;
 	SparseMatrixElement *firstElement;
+	SparseMatrixElement *lastElement;
 } SparseMatrix;
 
 SparseMatrix createSparseMatrix();

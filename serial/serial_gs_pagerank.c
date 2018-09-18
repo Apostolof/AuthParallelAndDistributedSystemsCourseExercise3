@@ -9,6 +9,7 @@ double seq_time;
 int main(int argc, char **argv) {
 	SparseMatrix transitionMatrix;
 	double *pagerankVector;
+	bool convergenceStatus;
 	Parameters parameters;
 
 	transitionMatrix = createSparseMatrix();
@@ -20,10 +21,17 @@ int main(int argc, char **argv) {
 	// Starts wall-clock timer
 	gettimeofday (&startwtime, NULL);
 
-	int iterations = pagerank(&transitionMatrix, &pagerankVector, parameters);
+	int iterations = pagerank(&transitionMatrix, &pagerankVector,
+		&convergenceStatus, parameters);
 	if (parameters.verbose) {
-		printf("\n----- Results -----\
-			\nTotal iterations = %d\n", iterations);
+		printf(ANSI_COLOR_YELLOW "\n----- RESULTS -----\n" ANSI_COLOR_RESET);
+		if (convergenceStatus) {
+			printf(ANSI_COLOR_GREEN "Pagerank converged after %d iterations!\n" \
+				ANSI_COLOR_RESET, iterations);
+		} else {
+			printf(ANSI_COLOR_RED "Pagerank did not converge after max number of" \
+				" iterations (%d) was reached!\n" ANSI_COLOR_RESET, iterations);
+		}
 	}
 
 	// Stops wall-clock timer

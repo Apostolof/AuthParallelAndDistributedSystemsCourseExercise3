@@ -9,11 +9,12 @@ const char *ARGUMENT_OUTPUT_FILENAME = "-o";
 
 const int NUMERICAL_BASE = 10;
 char *DEFAULT_OUTPUT_FILENAME = "pagerank_output";
-const int MAX_PAGE_LINKS_TEXT_SIZE = 4096;
+const int FILE_READ_BUFFER_SIZE = 4096;
 
 // ==================== PAGERANK ====================
 
-int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector, Parameters parameters) {
+int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector,
+	bool *convergenceStatus, Parameters parameters) {
 	int iterations = 0;
 	double delta,
 	*vectorDifference = (double *) malloc(parameters.numberOfPages * sizeof(double)),
@@ -22,6 +23,7 @@ int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector, Parameters
 	**linksFromConvergedPages = (double **) malloc(parameters.numberOfPages * sizeof(double *)),
 	*linksFromConvergedPagesPagerankVector = (double *) malloc(parameters.numberOfPages * sizeof(double));
 	bool *converganceMatrix = (bool *) malloc(parameters.numberOfPages * sizeof(bool));
+	*convergenceStatus = false;
 
 	for (int i=0; i<parameters.numberOfPages; ++i) {
 		convergedPagerankVector[i] = 0;
@@ -35,7 +37,7 @@ int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector, Parameters
 	}
 
 	if (parameters.verbose) {
-		printf("\n----- Starting iterations -----\n");
+		printf(ANSI_COLOR_YELLOW "\n----- Starting iterations -----\n" ANSI_COLOR_RESET);
 	}
 
 	do {
@@ -57,6 +59,9 @@ int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector, Parameters
 			vectorDifference[i] = (*pagerankVector)[i] - previousPagerankVector[i];
 		}
 		delta = vectorNorm(vectorDifference, parameters.numberOfPages);
+		if (delta < parameters.convergenceCriterion) {
+			*convergenceStatus = true;
+		}
 
 		if (iterations && !iterations % 10) {
 			for (int i=0; i<parameters.numberOfPages; ++i) {
@@ -88,8 +93,12 @@ int pagerank(SparseMatrix *transitionMatrix, double **pagerankVector, Parameters
 		}
 
 		++iterations;
-		printf("Iteration %d: delta = %f\n", iterations, delta);
-	} while (delta > parameters.convergenceCriterion &&
+		if (iterations%2) {
+			printf(ANSI_COLOR_BLUE "Iteration %d: delta = %f\n" ANSI_COLOR_RESET, iterations, delta);
+		} else {
+			printf(ANSI_COLOR_CYAN "Iteration %d: delta = %f\n" ANSI_COLOR_RESET, iterations, delta);
+		}
+	} while (!*convergenceStatus &&
 		(parameters.maxIterations == 0 || iterations < parameters.maxIterations));
 
 	if (!parameters.history) {
@@ -112,22 +121,22 @@ void initialize(SparseMatrix *transitionMatrix,
 
 	// Reads web graph from file
 	if ((*parameters).verbose) {
-		printf("----- Reading graph from file -----\n");
+		printf(ANSI_COLOR_YELLOW "----- Reading graph from file -----\n" ANSI_COLOR_RESET);
 	}
 	generateNormalizedTransitionMatrixFromFile(transitionMatrix, parameters);
 
 	// Outputs the algorithm parameters to the console
 	if ((*parameters).verbose) {
-		printf("\n----- Running with parameters -----\
-			\nNumber of pages: %d", (*parameters).numberOfPages);
+		printf(ANSI_COLOR_YELLOW "\n----- Running with parameters -----\n" ANSI_COLOR_RESET\
+			"Number of pages: %d", (*parameters).numberOfPages);
 		if (!(*parameters).maxIterations) {
 			printf("\nMaximum number of iterations: inf");
 		} else {
 			printf("\nMaximum number of iterations: %d", (*parameters).maxIterations);
 		}
-		printf("\nConvergence criterion: %f\
-			\nDamping factor: %f\
-			\nGraph filename: %s\n", (*parameters).convergenceCriterion,
+		printf("\nConvergence criterion: %f" \
+			"\nDamping factor: %f" \
+			"\nGraph filename: %s\n", (*parameters).convergenceCriterion,
 			(*parameters).dampingFactor, (*parameters).graphFilename);
 	}
 
@@ -266,37 +275,88 @@ void generateNormalizedTransitionMatrixFromFile(SparseMatrix *transitionMatrix,
 		exit(EXIT_FAILURE);
 	}
 
-	int pageIndex, count = 0;
-	while (fscanf(graphFile, "%d:", &pageIndex) != EOF) {
-		if (!(pageIndex%51050)) {
-			printf("\t%d\t%d%%\n", pageIndex, ++count);
-		}
+	char buffer[FILE_READ_BUFFER_SIZE];
+	char *readResult;
+	// Skips the first two lines
+	readResult = fgets(buffer, FILE_READ_BUFFER_SIZE, graphFile);
+	readResult = fgets(buffer, FILE_READ_BUFFER_SIZE, graphFile);
+	if (readResult == NULL) {
+		printf("Error while reading from the file. Does the file have the correct format?\n");
+		exit(EXIT_FAILURE);
+	}
 
-		char *restOfLine = malloc(MAX_PAGE_LINKS_TEXT_SIZE);
-		if (!fgets(restOfLine, MAX_PAGE_LINKS_TEXT_SIZE, graphFile)) {
-			exit(EXIT_FAILURE);
-		}
+	// Third line contains the numbers of nodes and edges
+	int numberOfNodes = 0, numberOfEdges;
 
-		char *token = strtok(restOfLine, " ");
+	readResult = fgets(buffer, FILE_READ_BUFFER_SIZE, graphFile);
+	if (readResult == NULL) {
+		printf("Error while reading from the file. Does the file have the correct format?\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// Parses the number of nodes and number of edges
+	{
+		// Splits string to whitespace
+		char *token = strtok(buffer, " ");
+		bool nextIsNodes = false, nextIsEdges = false;
 
 		while (token != NULL) {
-			if (strcmp(token, "\n") == 0) {
-				//token = strtok (NULL, " ");
+			if (strcmp(token, "Nodes:") == 0) {
+				nextIsNodes = true;
+			} else if (nextIsNodes) {
+				numberOfNodes = atoi(token);
+				nextIsNodes = false;
+			} else if (strcmp(token, "Edges:") == 0) {
+				nextIsEdges = true;
+			} else if (nextIsEdges) {
+				numberOfEdges = atoi(token);
 				break;
 			}
 
-			int outLink = atoi(token);
-			if (outLink != -1) {
-				apendElement(transitionMatrix, 1, pageIndex, outLink);
-			}
-			token = strtok (NULL, " ");
+			// Gets next string token
+			token = strtok (NULL, " ,.-");
 		}
 	}
-	printf("\t100%%\n");
-	printf("number of edges = %d\n", transitionMatrix->elements);
 
-	(*parameters).numberOfPages = pageIndex + 1;
+	if ((*parameters).verbose) {
+		printf("The number of pages is: %d\nThe number of edges is: %d\n",
+			numberOfNodes, numberOfEdges);
+	}
+	(*parameters).numberOfPages = numberOfNodes;
 
+	// Skips the fourth line
+	readResult = fgets(buffer, 512, graphFile);
+	if (readResult == NULL) {
+		printf("Error while reading from the file. Does the file have the correct format?\n");
+		exit(EXIT_FAILURE);
+	}
+
+	printf("SIZE OF STRUCT = %lu Bytes\n", sizeof(SparseMatrixElement));
+
+	int fivePercentIncrements = (int) numberOfEdges/20;
+	fivePercentIncrements = fivePercentIncrements != 0 ? fivePercentIncrements : 1;
+
+	for (int i=0; i<numberOfEdges; i++) {
+		if (((*parameters).verbose) && ((i % fivePercentIncrements) == 0)) {
+			int percentage = (i/fivePercentIncrements)*5;
+			printf("%d%% done", percentage);
+			if (percentage%20 == 0) {
+				printf("\n");
+			} else {
+				printf(" •••• ");
+			}
+		}
+
+		int fileFrom = 0, fileTo = 0;
+		if (!fscanf(graphFile, "%d %d", &fileFrom, &fileTo)) {
+			break;
+		}
+
+		apendElement(transitionMatrix, 1, fileFrom, fileTo);
+	}
+
+	// Calculates the outdegree of each page and assigns the uniform probability
+	// of transition to the elements of the corresponding row
 	int currentRow = transitionMatrix->firstElement->rowIndex;
 	SparseMatrixElement *startElement = transitionMatrix->firstElement;
 	while(true) {
@@ -315,9 +375,10 @@ void generateNormalizedTransitionMatrixFromFile(SparseMatrix *transitionMatrix,
 
 		// Assigns the value 1/outdegree to current page's columns
 		currentElement = startElement;
+		double pageUniformProbability = 1. / pageOutdegree;
 		for (int i=0; i<pageOutdegree; ++i) {
 			if (currentElement->rowIndex == currentRow) {
-				currentElement->value = 1. / pageOutdegree;
+				currentElement->value = pageUniformProbability;
 				currentElement = currentElement->nextElement;
 			} else {
 				break;
@@ -341,18 +402,18 @@ void generateNormalizedTransitionMatrixFromFile(SparseMatrix *transitionMatrix,
  * correct (valid) way to use the program.
 */
 void validUsage(char *programName) {
-	printf("%s [-c convergence_criterion] [-m max_iterations] [-a alpha] [-v] [-h] [-o output_filename] <graph_file>\
-		\n-c convergence_criterion\
-		\n\tthe convergence tolerance criterion\
-		\n-m max_iterations\
-		\n\tmaximum number of iterations to perform\
-		\n-a alpha\
-		\n\tthe damping factor\
-		\n-v enable verbal output\
-		\n-h enable history output to file\
-		\n-o output_filename\
-		\n\tfilename and path for the output\
-		\n", programName);
+	printf("%s [-c convergence_criterion] [-m max_iterations] [-a alpha] [-v] [-h] [-o output_filename] <graph_file>" \
+		"\n-c convergence_criterion" \
+		"\n\tthe convergence tolerance criterion" \
+		"\n-m max_iterations" \
+		"\n\tmaximum number of iterations to perform" \
+		"\n-a alpha" \
+		"\n\tthe damping factor" \
+		"\n-v enable verbal output" \
+		"\n-h enable history output to file" \
+		"\n-o output_filename" \
+		"\n\tfilename and path for the output" \
+		"\n", programName);
 	exit(EXIT_FAILURE);
 }
 
