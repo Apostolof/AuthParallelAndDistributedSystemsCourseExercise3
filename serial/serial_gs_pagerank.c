@@ -1,18 +1,16 @@
 #include <sys/time.h>
 
 #include "serial_gs_pagerank_functions.h"
-#include "sparse_matrix.h"
+//#include "coo_sparse_matrix.h"
 
 struct timeval startwtime, endwtime;
 double seq_time;
 
 int main(int argc, char **argv) {
-	SparseMatrix transitionMatrix;
+	CooSparseMatrix transitionMatrix = initCooSparseMatrix();
 	double *pagerankVector;
 	bool convergenceStatus;
 	Parameters parameters;
-
-	transitionMatrix = createSparseMatrix();
 
 	parseArguments(argc, argv, &parameters);
 
@@ -40,4 +38,7 @@ int main(int argc, char **argv) {
 		endwtime.tv_sec - startwtime.tv_sec);
 	printf("%s wall clock time = %f\n","Pagerank (Gauss-Seidel method), serial implementation",
 		seq_time);
+
+	free(pagerankVector);
+	destroyCooSparseMatrix(&transitionMatrix);
 }
