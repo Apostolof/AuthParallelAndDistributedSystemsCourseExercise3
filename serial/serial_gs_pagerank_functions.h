@@ -10,7 +10,6 @@
 #include <math.h>
 
 #include "coo_sparse_matrix.h"
-#include "lil_sparse_matrix.h"
 
 /* ===== DEFINITIONS ===== */
 
@@ -67,7 +66,7 @@ void parseArguments(int argumentCount, char **argumentVector,
 // them to populate the sparse array (transitionMatrix). The entries of the file
 // represent the edges of the web transition graph. The entries are then
 // modified to become the rows of the transition matrix.
-void generateNormalizedTransitionMatrixFromFile(CooSparseMatrix *transitionMatrix,
+void generateNormalizedTransitionMatrixFromFile(CsrSparseMatrix *transitionMatrix,
 	Parameters *parameters);
 
 // Function savePagerankToFile appends or overwrites the pagerank vector
@@ -78,14 +77,14 @@ void savePagerankToFile(char *filename, bool append, double *pagerankVector,
 // Function initialize allocates memory for the pagerank vector, reads the
 // dataset from the file and creates the transition probability distribution
 // matrix.
-void initialize(CooSparseMatrix *transitionMatrix, double **pagerankVector,
+void initialize(CsrSparseMatrix *transitionMatrix, double **pagerankVector,
 	Parameters *parameters);
 
 // Function vectorNorm calculates the first norm of a vector.
 double vectorNorm(double *vector, int vectorSize);
 
 // Function calculateNextPagerank calculates the next pagerank vector.
-void calculateNextPagerank(CooSparseMatrix *transitionMatrix,
+void calculateNextPagerank(CsrSparseMatrix *transitionMatrix,
 	double *previousPagerankVector, double **pagerankVector,
 	double *linksFromConvergedPagesPagerankVector,
 	double *convergedPagerankVector, int vectorSize, double dampingFactor);
@@ -93,7 +92,7 @@ void calculateNextPagerank(CooSparseMatrix *transitionMatrix,
 // Function pagerank iteratively calculates the pagerank of each page until
 // either the convergence criterion is met or the maximum number of iterations
 // is reached.
-int pagerank(CooSparseMatrix *transitionMatrix, double **pagerankVector,
+int pagerank(CsrSparseMatrix *transitionMatrix, double **pagerankVector,
 	bool *convergenceStatus, Parameters parameters);
 
 #endif	// SERIAL_GS_PAGERANK_FUNCTIONS_H

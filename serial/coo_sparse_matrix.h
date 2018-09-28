@@ -6,25 +6,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "csr_sparse_matrix.h"
+
 typedef struct cooSparseMatrixElement {
 	double value;
 	int rowIndex, columnIndex;
 } CooSparseMatrixElement;
 
 typedef struct cooSparseMatrix {
-	int size;
+	int size, numberOfNonZeroElements;
 	CooSparseMatrixElement **elements;
 } CooSparseMatrix;
 
 CooSparseMatrix initCooSparseMatrix();
-void allocMemoryForElements (CooSparseMatrix *sparseMatrix, int elements);
-void addElement(CooSparseMatrix *sparseMatrix, double value, int row, int column);
-void zeroOutRow(CooSparseMatrix *sparseMatrix, int row);
-void zeroOutColumn(CooSparseMatrix *sparseMatrix, int column);
-int *getRowIndexes(CooSparseMatrix sparseMatrix, int row, int *rowSize);
+void allocMemoryForCoo(CooSparseMatrix *sparseMatrix, int numberOfElements);
+void addElement(CooSparseMatrix *sparseMatrix, double value, int row,
+	int column);
 void transposeSparseMatrix(CooSparseMatrix *sparseMatrix);
-void cooSparseMatrixVectorMultiplication(CooSparseMatrix sparseMatrix, double *vector,
-	double **product, int vectorSize);
+void transformToCSR(CooSparseMatrix initialSparseMatrix,
+	CsrSparseMatrix *transformedSparseMatrix);
+void cooSparseMatrixVectorMultiplication(CooSparseMatrix sparseMatrix,
+	double *vector, double **product, int vectorSize);
 void destroyCooSparseMatrix(CooSparseMatrix *sparseMatrix);
 void printCooSparseMatrix(CooSparseMatrix sparseMatrix);
 

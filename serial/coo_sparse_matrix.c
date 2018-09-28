@@ -3,16 +3,25 @@
 CooSparseMatrix initCooSparseMatrix() {
 	CooSparseMatrix sparseMatrix;
 	sparseMatrix.size = 0;
+	sparseMatrix.numberOfNonZeroElements = 0;
 	sparseMatrix.elements = NULL;
 	return sparseMatrix;
 }
 
-void allocMemoryForElements (CooSparseMatrix *sparseMatrix, int elements) {
+void allocMemoryForCoo(CooSparseMatrix *sparseMatrix, int numberOfElements) {
 	sparseMatrix->elements = (CooSparseMatrixElement **) malloc(
-		elements * sizeof(CooSparseMatrixElement *));
+		numberOfElements * sizeof(CooSparseMatrixElement *));
+	sparseMatrix->size = numberOfElements;
 }
 
 void addElement(CooSparseMatrix *sparseMatrix, double value, int row, int column) {
+	if (sparseMatrix->numberOfNonZeroElements == sparseMatrix->size) {
+		printf("%d == %d |||| %d, %d\n", sparseMatrix->numberOfNonZeroElements,
+			sparseMatrix->size, row, column);
+		printf("Number of non zero elements exceeded size of matrix!\n");
+		exit(EXIT_FAILURE);
+	}
+
 	// Creates the new element
 	CooSparseMatrixElement *newElement = (CooSparseMatrixElement *) malloc(
 		sizeof(CooSparseMatrixElement));
@@ -20,58 +29,57 @@ void addElement(CooSparseMatrix *sparseMatrix, double value, int row, int column
 	newElement->rowIndex = row;
 	newElement->columnIndex = column;
 
-	sparseMatrix->elements[sparseMatrix->size] = newElement;
-	sparseMatrix->size = sparseMatrix->size + 1;
-}
-
-void zeroOutRow(CooSparseMatrix *sparseMatrix, int row) {
-	for (int i=0; i<sparseMatrix->size; ++i) {
-		CooSparseMatrixElement *element = sparseMatrix->elements[i];
-		if (element->rowIndex == row) {
-			element->value = 0;
-		}
-	}
-}
-void zeroOutColumn(CooSparseMatrix *sparseMatrix, int column) {
-	for (int i=0; i<sparseMatrix->size; ++i) {
-		CooSparseMatrixElement *element = sparseMatrix->elements[i];
-		if (element->columnIndex == column) {
-			element->value = 0;
-		}
-	}
-}
-
-int *getRowIndexes(CooSparseMatrix sparseMatrix, int row, int *rowSize) {
-	*rowSize = 0;
-	for (int i=0; i<sparseMatrix.size; ++i) {
-		if (sparseMatrix.elements[i]->rowIndex == row) {
-			++(*rowSize);
-		}
-	}
-
-	if (!(*rowSize)) {
-		return NULL;
-	}
-
-	int *indexes = (int *) malloc((*rowSize) * sizeof(int));
-	int rowElementIndex = 0;
-	for (int i=0; i<sparseMatrix.size; ++i) {
-		if (sparseMatrix.elements[i]->rowIndex == row) {
-			indexes[rowElementIndex] = i;
-			++rowElementIndex;
-		}
-	}
-
-	return indexes;
+	sparseMatrix->elements[sparseMatrix->numberOfNonZeroElements] = newElement;
+	sparseMatrix->numberOfNonZeroElements = sparseMatrix->numberOfNonZeroElements + 1;
 }
 
 void transposeSparseMatrix(CooSparseMatrix *sparseMatrix) {
-	for (int i=0; i<sparseMatrix->size; ++i) {
+	for (int i=0; i<sparseMatrix->numberOfNonZeroElements; ++i) {
 		CooSparseMatrixElement *element = sparseMatrix->elements[i];
 		int tempRow = element->rowIndex;
 		element->rowIndex = element->columnIndex;
 		element->columnIndex = tempRow;
 	}
+}
+
+void transformToCSR(CooSparseMatrix initialSparseMatrix,
+	CsrSparseMatrix *transformedSparseMatrix) {
+	// Taken from here: https://github.com/scipy/scipy/blob/3b36a57/scipy/sparse/sparsetools/coo.h#L34
+	if (initialSparseMatrix.numberOfNonZeroElements > transformedSparseMatrix->size) {
+		printf("Transformed CSR matrix does not have enough space!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	for (int i=0; i<initialSparseMatrix.numberOfNonZeroElements; ++i){
+		int rowIndex = initialSparseMatrix.elements[i]->rowIndex;
+		transformedSparseMatrix->rowCumulativeIndexes[rowIndex] = 
+		transformedSparseMatrix->rowCumulativeIndexes[rowIndex] + 1;
+	}
+
+	// Cumulative sums the non zero elements per row
+	for (int i=0, sum=0; i<transformedSparseMatrix->size+1; ++i){
+		int temp = transformedSparseMatrix->rowCumulativeIndexes[i];
+		transformedSparseMatrix->rowCumulativeIndexes[i] = sum;
+		sum += temp;
+	}
+
+	for (int i=0; i<initialSparseMatrix.numberOfNonZeroElements; ++i){
+		int row  = initialSparseMatrix.elements[i]->rowIndex;
+		int destinationIndex = transformedSparseMatrix->rowCumulativeIndexes[row];
+
+		transformedSparseMatrix->columnIndexes[destinationIndex] = initialSparseMatrix.elements[i]->columnIndex;
+		transformedSparseMatrix->values[destinationIndex] = initialSparseMatrix.elements[i]->value;
+
+		transformedSparseMatrix->rowCumulativeIndexes[row]++;
+	}
+
+	for (int i=0, last=0; i<=transformedSparseMatrix->size; i++){
+		int temp = transformedSparseMatrix->rowCumulativeIndexes[i];
+		transformedSparseMatrix->rowCumulativeIndexes[i] = last;
+		last = temp;
+	}
+
+	transformedSparseMatrix->numberOfNonZeroElements = initialSparseMatrix.numberOfNonZeroElements;
 }
 
 void cooSparseMatrixVectorMultiplication(CooSparseMatrix sparseMatrix,
@@ -82,7 +90,7 @@ void cooSparseMatrixVectorMultiplication(CooSparseMatrix sparseMatrix,
 	}
 
 	CooSparseMatrixElement *element;
-	for (int i=0; i<sparseMatrix.size; ++i) {
+	for (int i=0; i<sparseMatrix.numberOfNonZeroElements; ++i) {
 		element = sparseMatrix.elements[i];
 		int row = element->rowIndex, column = element->columnIndex;
 
@@ -97,19 +105,19 @@ void cooSparseMatrixVectorMultiplication(CooSparseMatrix sparseMatrix,
 }
 
 void destroyCooSparseMatrix(CooSparseMatrix *sparseMatrix) {
-	for (int i=0; i<sparseMatrix->size; ++i) {
+	for (int i=0; i<sparseMatrix->numberOfNonZeroElements; ++i) {
 		free(sparseMatrix->elements[i]);
 	}
 	free(sparseMatrix->elements);
 }
 
 void printCooSparseMatrix(CooSparseMatrix sparseMatrix) {
-	if (sparseMatrix.size == 0) {
+	if (sparseMatrix.numberOfNonZeroElements == 0) {
 		return;
 	}
 
 	CooSparseMatrixElement *element;
-	for (int i=0; i<sparseMatrix.size; ++i) {
+	for (int i=0; i<sparseMatrix.numberOfNonZeroElements; ++i) {
 		element = sparseMatrix.elements[i];
 		printf("[%d,%d] = %f\n", element->rowIndex, element->columnIndex,
 			element->value);

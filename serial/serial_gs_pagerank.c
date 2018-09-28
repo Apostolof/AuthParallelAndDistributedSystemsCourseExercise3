@@ -7,7 +7,7 @@ struct timeval startwtime, endwtime;
 double seq_time;
 
 int main(int argc, char **argv) {
-	CooSparseMatrix transitionMatrix = initCooSparseMatrix();
+	CsrSparseMatrix transitionMatrix = initCsrSparseMatrix();
 	double *pagerankVector;
 	bool convergenceStatus;
 	Parameters parameters;
@@ -40,5 +40,5 @@ int main(int argc, char **argv) {
 		seq_time);
 
 	free(pagerankVector);
-	destroyCooSparseMatrix(&transitionMatrix);
+	destroyCsrSparseMatrix(&transitionMatrix);
 }

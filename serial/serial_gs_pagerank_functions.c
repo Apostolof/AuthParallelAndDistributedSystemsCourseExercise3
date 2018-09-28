@@ -16,17 +16,17 @@ char *DEFAULT_OUTPUT_FILENAME = "pagerank_output";
 const int FILE_READ_BUFFER_SIZE = 4096;
 
 const int CONVERGENCE_CHECK_ITERATION_PERIOD = 3;
-const int SPARSITY_INCREASE_ITERATION_PERIOD = 9;
+const int SPARSITY_INCREASE_ITERATION_PERIOD = 3;
 
 /* ===== FUNCTIONS ===== */
 
-int pagerank(CooSparseMatrix *transitionMatrix, double **pagerankVector,
+int pagerank(CsrSparseMatrix *transitionMatrix, double **pagerankVector,
 	bool *convergenceStatus, Parameters parameters) {
 	// Variables declaration
 	int iterations = 0, numberOfPages = parameters.numberOfPages;
 	double delta, *pagerankDifference, *previousPagerankVector,
 	*convergedPagerankVector, *linksFromConvergedPagesPagerankVector;
-	LilSparseMatrix linksFromConvergedPages = createLilSparseMatrix();
+	CooSparseMatrix linksFromConvergedPages = initCooSparseMatrix();
 	bool *convergenceMatrix;
 
 	// Space allocation
@@ -47,6 +47,7 @@ int pagerank(CooSparseMatrix *transitionMatrix, double **pagerankVector,
 		*convergenceStatus = false;
 
 		// Initialization
+		allocMemoryForCoo(&linksFromConvergedPages, transitionMatrix->numberOfNonZeroElements);
 		for (int i=0; i<numberOfPages; ++i) {
 			convergedPagerankVector[i] = 0;
 			convergenceMatrix[i] = false;
@@ -107,17 +108,21 @@ int pagerank(CooSparseMatrix *transitionMatrix, double **pagerankVector,
 			}
 
 			for (int i=0; i<numberOfPages; ++i) {
+				// Filters newly converged pages
 				if (newlyConvergedPages[i] == true) {
-					int rowSize;
-					int *rowIndexes = getRowIndexes(*transitionMatrix, i, &rowSize);
-					for (int j=0; j<rowSize; ++j){
-						CooSparseMatrixElement *element = transitionMatrix->elements[rowIndexes[j]];
-						// Checks for links from converged pages to non converged
-						int pageLinksTo = element->columnIndex;
-						if (convergenceMatrix[pageLinksTo] == false){
-							// Link exists, adds element to the vector
-							apendElement(&linksFromConvergedPages,
-								element->value, i, pageLinksTo);
+					// Checks if this converged page has an out-link to a non converged one
+					int rowStartIndex = transitionMatrix->rowCumulativeIndexes[i],
+					rowEndIndex = transitionMatrix->rowCumulativeIndexes[i+1];
+					if (rowEndIndex > rowStartIndex) {
+						// This row (page) has non zero elements (out-links)
+						for (int j=rowStartIndex; j<rowEndIndex; ++j) {
+							// Checks for links from converged pages to non converged
+							int pageLinksTo = transitionMatrix->columnIndexes[j];
+							if (convergenceMatrix[pageLinksTo] == false){
+								// Link exists, adds element to the vector
+								addElement(&linksFromConvergedPages,
+									transitionMatrix->values[j], i, pageLinksTo);
+							}
 						}
 					}
 
@@ -127,7 +132,7 @@ int pagerank(CooSparseMatrix *transitionMatrix, double **pagerankVector,
 					zeroOutColumn(transitionMatrix, i);
 
 					// Builds the new linksFromConvergedPagesPagerankVector
-					lilSparseMatrixVectorMultiplication(linksFromConvergedPages,
+					cooSparseMatrixVectorMultiplication(linksFromConvergedPages,
 						*pagerankVector, &linksFromConvergedPagesPagerankVector,
 						numberOfPages);
 				}
@@ -157,7 +162,7 @@ int pagerank(CooSparseMatrix *transitionMatrix, double **pagerankVector,
 	free(convergedPagerankVector);
 	free(linksFromConvergedPagesPagerankVector);
 	free(convergenceMatrix);
-	destroyLilSparseMatrix(&linksFromConvergedPages);
+	destroyCooSparseMatrix(&linksFromConvergedPages);
 
 	return iterations;
 }
@@ -167,7 +172,7 @@ int pagerank(CooSparseMatrix *transitionMatrix, double **pagerankVector,
  * from the file and creates the initial transition probability distribution
  * matrix.
 */
-void initialize(CooSparseMatrix *transitionMatrix,
+void initialize(CsrSparseMatrix *transitionMatrix,
 	double **pagerankVector, Parameters *parameters) {
 
 	// Reads web graph from file
@@ -197,9 +202,6 @@ void initialize(CooSparseMatrix *transitionMatrix,
 	for (int i=0; i<(*parameters).numberOfPages; ++i) {
 		(*pagerankVector)[i] = webUniformProbability;
 	}
-
-	// Transposes the transition matrix (P^T).
-	transposeSparseMatrix(transitionMatrix);
 }
 
 // ==================== MATH UTILS ====================
@@ -208,14 +210,14 @@ void initialize(CooSparseMatrix *transitionMatrix,
  * calculateNextPagerank calculates the product of the multiplication
  * between a matrix and the a vector in a cheap way.
 */
-void calculateNextPagerank(CooSparseMatrix *transitionMatrix,
+void calculateNextPagerank(CsrSparseMatrix *transitionMatrix,
 	double *previousPagerankVector, double **pagerankVector,
 	double *linksFromConvergedPagesPagerankVector,
 	double *convergedPagerankVector, int vectorSize, double dampingFactor) {
 	// Calculates the web uniform probability once.
 	double webUniformProbability = 1. / vectorSize;
 
-	cooSparseMatrixVectorMultiplication(*transitionMatrix, previousPagerankVector,
+	csrSparseMatrixVectorMultiplication(*transitionMatrix, previousPagerankVector,
 		pagerankVector, vectorSize);
 
 	for (int i=0; i<vectorSize; ++i) {
@@ -319,7 +321,7 @@ void parseArguments(int argumentCount, char **argumentVector, Parameters *parame
  * readGraphFromFile loads the file supplied in the command line arguments to an
  * array (directedWebGraph) that represents the graph.
 */
-void generateNormalizedTransitionMatrixFromFile(CooSparseMatrix *transitionMatrix,
+void generateNormalizedTransitionMatrixFromFile(CsrSparseMatrix *transitionMatrix,
 	Parameters *parameters){
 	FILE *graphFile;
 
@@ -385,16 +387,12 @@ void generateNormalizedTransitionMatrixFromFile(CooSparseMatrix *transitionMatri
 		exit(EXIT_FAILURE);
 	}
 
-	int tenPercentIncrements = (int) numberOfEdges/10;
+	
 	int maxPageIndex = 0;
-	allocMemoryForElements(transitionMatrix, numberOfEdges);
+	CooSparseMatrix tempMatrix = initCooSparseMatrix();
+	allocMemoryForCoo(&tempMatrix, numberOfEdges);
 
 	for (int i=0; i<numberOfEdges; i++) {
-		if (((*parameters).verbose) && (tenPercentIncrements != 0) && ((i % tenPercentIncrements) == 0)) {
-			int percentage = (i/tenPercentIncrements)*10;
-			printf("%d%% • ", percentage);
-		}
-
 		int fileFrom = 0, fileTo = 0;
 		if (!fscanf(graphFile, "%d %d", &fileFrom, &fileTo)) {
 			break;
@@ -406,9 +404,8 @@ void generateNormalizedTransitionMatrixFromFile(CooSparseMatrix *transitionMatri
 		if (fileTo > maxPageIndex) {
 			maxPageIndex = fileTo;
 		}
-		addElement(transitionMatrix, 1, fileFrom, fileTo);
+		addElement(&tempMatrix, 1, fileFrom, fileTo);
 	}
-	printf("\n");
 
 	if ((*parameters).verbose) {
 		printf("Max page index found is: %d\n", maxPageIndex);
@@ -417,15 +414,15 @@ void generateNormalizedTransitionMatrixFromFile(CooSparseMatrix *transitionMatri
 
 	// Calculates the outdegree of each page and assigns the uniform probability
 	// of transition to the elements of the corresponding row
-	int currentRow = transitionMatrix->elements[0]->rowIndex, pageOutdegree = 1;
-	for (int i=1; i<transitionMatrix->size; ++i) {
-		CooSparseMatrixElement *currentElement = transitionMatrix->elements[i];
+	int currentRow = tempMatrix.elements[0]->rowIndex, pageOutdegree = 1;
+	for (int i=1; i<tempMatrix.size; ++i) {
+		CooSparseMatrixElement *currentElement = tempMatrix.elements[i];
 		if (currentElement->rowIndex == currentRow) {
 			++pageOutdegree;
 		} else {
 			double pageUniformProbability = 1. / pageOutdegree;
 			for (int j=i-pageOutdegree; j<i; ++j) {
-				transitionMatrix->elements[j]->value = pageUniformProbability;
+				tempMatrix.elements[j]->value = pageUniformProbability;
 			}
 
 			currentRow = currentElement->rowIndex;
@@ -435,9 +432,17 @@ void generateNormalizedTransitionMatrixFromFile(CooSparseMatrix *transitionMatri
 
 	// Does the last row
 	double pageUniformProbability = 1. / pageOutdegree;
-	for (int j=transitionMatrix->size-pageOutdegree; j<transitionMatrix->size; ++j) {
-		transitionMatrix->elements[j]->value = pageUniformProbability;
+	for (int j=tempMatrix.size-pageOutdegree; j<tempMatrix.size; ++j) {
+		tempMatrix.elements[j]->value = pageUniformProbability;
 	}
+
+	// Transposes the temporary transition matrix (P^T).
+	transposeSparseMatrix(&tempMatrix);
+
+	allocMemoryForCsr(transitionMatrix, numberOfEdges);
+	// Transforms the temporary COO matrix to the desired CSR format
+	transformToCSR(tempMatrix, transitionMatrix);
+	destroyCooSparseMatrix(&tempMatrix);
 
 	fclose(graphFile);
 }
