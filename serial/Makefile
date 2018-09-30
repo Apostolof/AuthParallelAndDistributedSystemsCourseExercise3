@@ -3,7 +3,7 @@ SHELL := /bin/bash
 # ============================================
 # COMMANDS
 
-CC = gcc
+CC = gcc -std=gnu99
 RM = rm -f
 CFLAGS_DEBUG=-O0 -ggdb3 -Wall -I.
 CFLAGS=-O3 -Wall -I.
