@@ -62,7 +62,7 @@ int pagerank(CsrSparseMatrix *transitionMatrix, double **pagerankVector,
 	do {
 		// Stores previous pagerank vector
 		memcpy(previousPagerankVector, *pagerankVector, numberOfPages * sizeof(double));
-		
+
 		// Calculates new pagerank vector
 		calculateNextPagerank(transitionMatrix, previousPagerankVector,
 			pagerankVector, linksFromConvergedPagesPagerankVector,
@@ -126,8 +126,8 @@ int pagerank(CsrSparseMatrix *transitionMatrix, double **pagerankVector,
 						}
 					}
 
-					// Increases sparsity of the transition matrix by
-					// deleting elements that correspond to converged pages
+					// Increases sparsity of the transition matrix by zeroing
+					// out elements that correspond to converged pages
 					zeroOutRow(transitionMatrix, i);
 					zeroOutColumn(transitionMatrix, i);
 
@@ -215,8 +215,6 @@ void calculateNextPagerank(CsrSparseMatrix *transitionMatrix,
 	double *linksFromConvergedPagesPagerankVector,
 	double *convergedPagerankVector, int vectorSize, double dampingFactor) {
 	// Calculates the web uniform probability once.
-	
-	
 	double webUniformProbability = 1. / vectorSize;
 
 	csrSparseMatrixVectorMultiplication(*transitionMatrix, previousPagerankVector,
@@ -232,7 +230,6 @@ void calculateNextPagerank(CsrSparseMatrix *transitionMatrix,
 	for (int i=0; i<vectorSize; ++i) {
 		(*pagerankVector)[i] += normDifference * webUniformProbability +
 		linksFromConvergedPagesPagerankVector[i] + convergedPagerankVector[i];
-		//(*pagerankVector)[i] += 0.5*normDifference* webUniformProbability +linksFromConvergedPagesPagerankVector[i] + convergedPagerankVector[i];
 	}
 }
 

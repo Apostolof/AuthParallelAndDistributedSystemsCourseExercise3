@@ -15,9 +15,8 @@ void allocMemoryForCoo(CooSparseMatrix *sparseMatrix, int numberOfElements) {
 }
 
 void addElement(CooSparseMatrix *sparseMatrix, double value, int row, int column) {
+	// Checks if there is enough space allocated
 	if (sparseMatrix->numberOfNonZeroElements == sparseMatrix->size) {
-		printf("%d == %d |||| %d, %d\n", sparseMatrix->numberOfNonZeroElements,
-			sparseMatrix->size, row, column);
 		printf("Number of non zero elements exceeded size of matrix!\n");
 		exit(EXIT_FAILURE);
 	}
@@ -29,6 +28,7 @@ void addElement(CooSparseMatrix *sparseMatrix, double value, int row, int column
 	newElement->rowIndex = row;
 	newElement->columnIndex = column;
 
+	// Adds the new element to the first empty (NULL) address of the matrix
 	sparseMatrix->elements[sparseMatrix->numberOfNonZeroElements] = newElement;
 	sparseMatrix->numberOfNonZeroElements = sparseMatrix->numberOfNonZeroElements + 1;
 }
@@ -42,14 +42,19 @@ void transposeSparseMatrix(CooSparseMatrix *sparseMatrix) {
 	}
 }
 
+/*
+ * This function is a port of the one found here:
+ * https://github.com/scipy/scipy/blob/3b36a57/scipy/sparse/sparsetools/coo.h#L34
+*/
 void transformToCSR(CooSparseMatrix initialSparseMatrix,
 	CsrSparseMatrix *transformedSparseMatrix) {
-	// Taken from here: https://github.com/scipy/scipy/blob/3b36a57/scipy/sparse/sparsetools/coo.h#L34
+	// Checks if the sizes of the two matrices fit
 	if (initialSparseMatrix.numberOfNonZeroElements > transformedSparseMatrix->size) {
 		printf("Transformed CSR matrix does not have enough space!\n");
 		exit(EXIT_FAILURE);
 	}
 
+	// Calculates the elements per row
 	for (int i=0; i<initialSparseMatrix.numberOfNonZeroElements; ++i){
 		int rowIndex = initialSparseMatrix.elements[i]->rowIndex;
 		transformedSparseMatrix->rowCumulativeIndexes[rowIndex] = 
@@ -63,6 +68,7 @@ void transformToCSR(CooSparseMatrix initialSparseMatrix,
 		sum += temp;
 	}
 
+	// Copies the values and columns of the elements
 	for (int i=0; i<initialSparseMatrix.numberOfNonZeroElements; ++i){
 		int row  = initialSparseMatrix.elements[i]->rowIndex;
 		int destinationIndex = transformedSparseMatrix->rowCumulativeIndexes[row];
@@ -73,6 +79,7 @@ void transformToCSR(CooSparseMatrix initialSparseMatrix,
 		transformedSparseMatrix->rowCumulativeIndexes[row]++;
 	}
 
+	// Fixes the cumulative sum
 	for (int i=0, last=0; i<=transformedSparseMatrix->size; i++){
 		int temp = transformedSparseMatrix->rowCumulativeIndexes[i];
 		transformedSparseMatrix->rowCumulativeIndexes[i] = last;

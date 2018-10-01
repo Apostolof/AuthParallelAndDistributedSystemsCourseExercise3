@@ -24,8 +24,8 @@ void allocMemoryForCsr(CsrSparseMatrix *sparseMatrix, int numberOfElements) {
 	sparseMatrix->size = numberOfElements;
 }
 
-// Row indexes start from 0!
 void zeroOutRow(CsrSparseMatrix *sparseMatrix, int row) {
+	// Gets start and end indexes of the row's elements
 	int startIndex = sparseMatrix->rowCumulativeIndexes[row],
 	endIndex = sparseMatrix->rowCumulativeIndexes[row+1];
 	for (int i=startIndex; i<endIndex; ++i) {
@@ -36,7 +36,6 @@ void zeroOutRow(CsrSparseMatrix *sparseMatrix, int row) {
 void zeroOutColumn(CsrSparseMatrix *sparseMatrix, int column) {
 	for (int i=0; i<sparseMatrix->numberOfNonZeroElements; ++i){
 		if(sparseMatrix->columnIndexes[i] == column){
-			// Zeros out this element
 			sparseMatrix->values[i] = 0;
 		}
 	}

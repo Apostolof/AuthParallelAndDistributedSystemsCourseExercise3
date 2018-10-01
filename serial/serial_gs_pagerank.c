@@ -3,7 +3,6 @@
 #include "serial_gs_pagerank_functions.h"
 
 struct timeval startwtime, endwtime;
-double seq_time;
 
 int main(int argc, char **argv) {
 	CsrSparseMatrix transitionMatrix = initCsrSparseMatrix();
