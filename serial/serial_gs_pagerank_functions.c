@@ -15,8 +15,8 @@ const int NUMERICAL_BASE = 10;
 char *DEFAULT_OUTPUT_FILENAME = "pagerank_output";
 const int FILE_READ_BUFFER_SIZE = 4096;
 
-const int CONVERGENCE_CHECK_ITERATION_PERIOD = 3;
-const int SPARSITY_INCREASE_ITERATION_PERIOD = 3;
+const int CONVERGENCE_CHECK_ITERATION_PERIOD = 2;
+const int SPARSITY_INCREASE_ITERATION_PERIOD = 10;
 
 /* ===== FUNCTIONS ===== */
 
@@ -72,7 +72,7 @@ int pagerank(CsrSparseMatrix *transitionMatrix, double **pagerankVector,
 		if (parameters.history) {
 			// Outputs pagerank vector to file
 			savePagerankToFile(parameters.outputFilename, iterations != 0,
-				*pagerankVector, numberOfPages, realIterations);
+				*pagerankVector, numberOfPages, iterations);
 		}
 
 		// Periodically checks for convergence
@@ -149,11 +149,11 @@ int pagerank(CsrSparseMatrix *transitionMatrix, double **pagerankVector,
 		}
 	} while (!*convergenceStatus && (parameters.maxIterations == 0 ||
 		iterations < parameters.maxIterations));
-	(*parameters).realIterations = iterations;
+
 	if (!parameters.history) {
-		// Outputs last pagerank vector to file
+		// Always outputs last pagerank vector to file
 		savePagerankToFile(parameters.outputFilename, false, *pagerankVector,
-			numberOfPages, parameters.realIterations);
+			numberOfPages, iterations);
 	}
 
 	// Frees memory
@@ -163,7 +163,7 @@ int pagerank(CsrSparseMatrix *transitionMatrix, double **pagerankVector,
 	free(linksFromConvergedPagesPagerankVector);
 	free(convergenceMatrix);
 	destroyCooSparseMatrix(&linksFromConvergedPages);
-	
+
 	return iterations;
 }
 
@@ -195,7 +195,7 @@ void initialize(CsrSparseMatrix *transitionMatrix,
 			"\nGraph filename: %s\n", (*parameters).convergenceCriterion,
 			(*parameters).dampingFactor, (*parameters).graphFilename);
 	}
-	(*parameters).realIterations = 0;
+
 	// Allocates memory for the pagerank vector
 	(*pagerankVector) = (double *) malloc((*parameters).numberOfPages * sizeof(double));
 	double webUniformProbability = 1. / (*parameters).numberOfPages;
@@ -230,9 +230,9 @@ void calculateNextPagerank(CsrSparseMatrix *transitionMatrix,
 	vectorNorm(*pagerankVector, vectorSize);
 
 	for (int i=0; i<vectorSize; ++i) {
-		//(*pagerankVector)[i] += normDifference * webUniformProbability +
-		//linksFromConvergedPagesPagerankVector[i] + convergedPagerankVector[i];
-		(*pagerankVector)[i] += 0.5*normDifference* webUniformProbability +linksFromConvergedPagesPagerankVector[i] + convergedPagerankVector[i];
+		(*pagerankVector)[i] += normDifference * webUniformProbability +
+		linksFromConvergedPagesPagerankVector[i] + convergedPagerankVector[i];
+		//(*pagerankVector)[i] += 0.5*normDifference* webUniformProbability +linksFromConvergedPagesPagerankVector[i] + convergedPagerankVector[i];
 	}
 }
 
@@ -417,33 +417,27 @@ void generateNormalizedTransitionMatrixFromFile(CsrSparseMatrix *transitionMatri
 
 	// Calculates the outdegree of each page and assigns the uniform probability
 	// of transition to the elements of the corresponding row
-
 	int* pageOutdegree = malloc((*parameters).numberOfPages*sizeof(int));
 	for (int i=0; i<(*parameters).numberOfPages; ++i){
 		pageOutdegree[i] = 0;
 	}
 
-	
 	for (int i=0; i<numberOfEdges; ++i) {
 		int currentRow = tempMatrix.elements[i]->rowIndex;
-
-				if (currentRow == tempMatrix.elements[i]->rowIndex) {
-					++pageOutdegree[currentRow];
-				} 
-	
-			
+		++pageOutdegree[currentRow];
 	}
 
 	for (int i=0; i<tempMatrix.size; ++i) {
 		tempMatrix.elements[i]->value = 1./pageOutdegree[tempMatrix.elements[i]->rowIndex];
 	}
-	
+	free(pageOutdegree);
+
 	// Transposes the temporary transition matrix (P^T).
 	transposeSparseMatrix(&tempMatrix);
+
 	allocMemoryForCsr(transitionMatrix, numberOfEdges);
 	// Transforms the temporary COO matrix to the desired CSR format
 	transformToCSR(tempMatrix, transitionMatrix);
-	//printCsrSparseMatrix(*transitionMatrix);
 	destroyCooSparseMatrix(&tempMatrix);
 
 	fclose(graphFile);
@@ -481,7 +475,7 @@ int checkIncrement(int previousIndex, int maxIndex, char *programName) {
 }
 
 void savePagerankToFile(char *filename, bool append, double *pagerankVector,
-	int vectorSize, int realIterations) {
+	int vectorSize, int iteration) {
 	FILE *outputFile;
 
 	if (append) {
@@ -494,13 +488,18 @@ void savePagerankToFile(char *filename, bool append, double *pagerankVector,
 		printf("Error while opening the output file.\n");
 		return;
 	}
-	//Save numberofPages and convergence time
-	
+
+	// Saves the pagerank vector
+	//fprintf(outputFile, "Iteration %d:\t", iteration);
+	double sum = 0;
 	for (int i=0; i<vectorSize; ++i) {
-		fprintf(outputFile, "%f ", pagerankVector[i]);
+		sum += pagerankVector[i];
 	}
-	fprintf(outputFile, "\n");
-	//fprintf(outputFile, "%d\t", vectorSize);
-	//fprintf(outputFile, "%d\t", realIterations);
+	//fprintf(outputFile, "%f\n", sum);
+
+	for (int i=0; i<vectorSize; ++i) {
+		fprintf(outputFile, "%d = %.10g\n", i, pagerankVector[i]/sum);
+	}
+
 	fclose(outputFile);
 }

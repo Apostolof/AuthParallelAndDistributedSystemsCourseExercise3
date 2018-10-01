@@ -1,7 +1,6 @@
 #include <sys/time.h>
 
 #include "serial_gs_pagerank_functions.h"
-//#include "coo_sparse_matrix.h"
 
 struct timeval startwtime, endwtime;
 double seq_time;

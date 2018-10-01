@@ -41,7 +41,7 @@ extern const int FILE_READ_BUFFER_SIZE;
 
 // A data structure to conveniently hold the algorithm's parameters.
 typedef struct parameters {
-	int numberOfPages, maxIterations, realIterations;
+	int numberOfPages, maxIterations;
 	double convergenceCriterion, dampingFactor;
 	bool verbose, history;
 	char *outputFilename, *graphFilename;
@@ -72,7 +72,7 @@ void generateNormalizedTransitionMatrixFromFile(CsrSparseMatrix *transitionMatri
 // Function savePagerankToFile appends or overwrites the pagerank vector
 // "pagerankVector" to the file with the filename supplied in the arguments.
 void savePagerankToFile(char *filename, bool append, double *pagerankVector,
-	int vectorSize, int realIterations);
+	int vectorSize, int iteration);
 
 // Function initialize allocates memory for the pagerank vector, reads the
 // dataset from the file and creates the transition probability distribution
