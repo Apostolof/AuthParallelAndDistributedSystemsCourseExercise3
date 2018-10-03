@@ -1,7 +1,4 @@
-# Directed graph (each unordered pair of nodes is saved once): web-Google.txt 
-# Webgraph from the Google programming contest, 2002
 # Nodes: 90000 Edges: 89999
-# FromNodeId	ToNodeId
 1	0
 2	0
 3	1

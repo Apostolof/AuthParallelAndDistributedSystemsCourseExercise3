@@ -358,15 +358,8 @@ void generateNormalizedTransitionMatrixFromFile(CsrSparseMatrix *transitionMatri
 
 	char buffer[FILE_READ_BUFFER_SIZE];
 	char *readResult;
-	// Skips the first two lines
-	readResult = fgets(buffer, FILE_READ_BUFFER_SIZE, graphFile);
-	readResult = fgets(buffer, FILE_READ_BUFFER_SIZE, graphFile);
-	if (readResult == NULL) {
-		printf("Error while reading from the file. Does the file have the correct format?\n");
-		exit(EXIT_FAILURE);
-	}
 
-	// Third line contains the numbers of nodes and edges
+	// First line contains the numbers of nodes and edges
 	int numberOfNodes = 0, numberOfEdges = 0;
 
 	readResult = fgets(buffer, FILE_READ_BUFFER_SIZE, graphFile);
@@ -404,14 +397,6 @@ void generateNormalizedTransitionMatrixFromFile(CsrSparseMatrix *transitionMatri
 			numberOfNodes, numberOfEdges);
 	}
 
-	// Skips the fourth line
-	readResult = fgets(buffer, 512, graphFile);
-	if (readResult == NULL) {
-		printf("Error while reading from the file. Does the file have the correct format?\n");
-		exit(EXIT_FAILURE);
-	}
-
-	
 	int maxPageIndex = 0;
 	CooSparseMatrix tempMatrix = initCooSparseMatrix();
 	allocMemoryForCoo(&tempMatrix, numberOfEdges);

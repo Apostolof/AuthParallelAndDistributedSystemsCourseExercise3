@@ -23,7 +23,7 @@ all: $(EXECUTABLES)
 # DEPENDENCIES (HEADERS)
 
 %.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS_DEBUG)
 
 .PRECIOUS: $(EXECUTABLES) $(OBJ)
 
@@ -31,7 +31,7 @@ all: $(EXECUTABLES)
 # EXECUTABLE (MAIN)
 
 $(EXECUTABLES): $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS)
+	$(CC) -o $@ $^ $(CFLAGS_DEBUG)
 
 clean:
 	$(RM) *.o *~ $(EXECUTABLES)
