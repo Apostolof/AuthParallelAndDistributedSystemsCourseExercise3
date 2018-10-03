@@ -49,7 +49,7 @@ void transposeSparseMatrix(CooSparseMatrix *sparseMatrix) {
 void transformToCSR(CooSparseMatrix initialSparseMatrix,
 	CsrSparseMatrix *transformedSparseMatrix) {
 	// Checks if the sizes of the two matrices fit
-	if (initialSparseMatrix.numberOfNonZeroElements > transformedSparseMatrix->size) {
+	if (initialSparseMatrix.numberOfNonZeroElements > transformedSparseMatrix->numberOfElements) {
 		printf("Transformed CSR matrix does not have enough space!\n");
 		exit(EXIT_FAILURE);
 	}
@@ -85,8 +85,6 @@ void transformToCSR(CooSparseMatrix initialSparseMatrix,
 		transformedSparseMatrix->rowCumulativeIndexes[i] = last;
 		last = temp;
 	}
-
-	transformedSparseMatrix->numberOfNonZeroElements = initialSparseMatrix.numberOfNonZeroElements;
 }
 
 void cooSparseMatrixVectorMultiplication(CooSparseMatrix sparseMatrix,

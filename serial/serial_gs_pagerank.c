@@ -15,22 +15,30 @@ int main(int argc, char **argv) {
 
 	initialize(&transitionMatrix, &pagerankVector, &parameters);
 
+	// Saves information about the dataset to the output file
+	{
+		FILE *outputFile;
+		outputFile = fopen(parameters.outputFilename, "w");
+
+		if (outputFile == NULL) {
+			printf("Error while opening the output file.\n");
+			exit(EXIT_FAILURE);
+		}
+
+		fprintf(outputFile, "Pagerank will run for the dataset %s\n"\
+			"Dataset contains %d pages with %d outlinks.\n",
+			parameters.graphFilename, parameters.numberOfPages, transitionMatrix.size);
+
+		fclose(outputFile);
+	}
+
 	// Starts wall-clock timer
 	gettimeofday (&startwtime, NULL);
 	int* iterations = (int *)malloc(parameters.numberOfPages*sizeof(int));
-	
+
+	// Calculates pagerank
 	iterations = pagerank(&transitionMatrix, &pagerankVector,
 		&convergenceStatus, parameters, &maxIterationsForConvergence);
-	if (parameters.verbose) {
-		printf(ANSI_COLOR_YELLOW "\n----- RESULTS -----\n" ANSI_COLOR_RESET);
-		if (convergenceStatus) {
-			printf(ANSI_COLOR_GREEN "Pagerank converged after %d iterations!\n" \
-				ANSI_COLOR_RESET, maxIterationsForConvergence);
-		} else {
-			printf(ANSI_COLOR_RED "Pagerank did not converge after max number of" \
-				" iterations (%d) was reached!\n" ANSI_COLOR_RESET, maxIterationsForConvergence);
-		}
-	}
 
 	// Stops wall-clock timer
 	gettimeofday (&endwtime, NULL);
@@ -38,12 +46,19 @@ int main(int argc, char **argv) {
 		endwtime.tv_sec - startwtime.tv_sec);
 	printf("%s wall clock time = %f\n","Pagerank (Gauss-Seidel method), serial implementation",
 		seq_time);
-	if (!parameters.history) {
-		// Always outputs numberOfPages, max_iterations, last pagerank and iterations 
-		// for all pages
-		savePagerankToFile(parameters.outputFilename, false, pagerankVector,
-			parameters.numberOfPages, iterations, maxIterationsForConvergence);
+
+	printf(ANSI_COLOR_YELLOW "\n----- RESULTS -----\n" ANSI_COLOR_RESET);
+	if (convergenceStatus) {
+		printf(ANSI_COLOR_GREEN "Pagerank converged after %d iterations!\n" \
+			ANSI_COLOR_RESET, maxIterationsForConvergence);
+	} else {
+		printf(ANSI_COLOR_RED "Pagerank did not converge after max number of" \
+			" iterations (%d) was reached!\n" ANSI_COLOR_RESET, maxIterationsForConvergence);
 	}
+
+	// Saves results to the output file
+	savePagerankToFile(parameters.outputFilename, iterations, pagerankVector,
+		parameters.numberOfPages, maxIterationsForConvergence);
 
 	free(pagerankVector);
 	destroyCsrSparseMatrix(&transitionMatrix);

@@ -12,7 +12,7 @@
 
 // A sparse matrix in compressed SparseRow format.
 typedef struct csrSparseMatrix {
-	int size, numberOfNonZeroElements;
+	int size, numberOfElements;
 	int *rowCumulativeIndexes, *columnIndexes;
 	double *values;
 } CsrSparseMatrix;
@@ -24,7 +24,7 @@ typedef struct csrSparseMatrix {
 CsrSparseMatrix initCsrSparseMatrix();
 
 // allocMemoryForCsr allocates memory for the elements of the matrix.
-void allocMemoryForCsr(CsrSparseMatrix *sparseMatrix, int numberOfElements);
+void allocMemoryForCsr(CsrSparseMatrix *sparseMatrix, int size, int numberOfElements);
 
 // zeroOutRow assigns a zero value to all the elements of a row in the matrix.
 void zeroOutRow(CsrSparseMatrix *sparseMatrix, int row);

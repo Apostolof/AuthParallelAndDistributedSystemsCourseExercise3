@@ -71,8 +71,8 @@ void generateNormalizedTransitionMatrixFromFile(CsrSparseMatrix *transitionMatri
 
 // Function savePagerankToFile appends or overwrites the pagerank vector
 // "pagerankVector" to the file with the filename supplied in the arguments.
-void savePagerankToFile(char *filename, bool append, double *pagerankVector,
-	int vectorSize, int* iterations, int maxIterationsForConvergence);
+void savePagerankToFile(char *filename, int *iterationsUntilConvergence,
+	double *pagerankVector, int vectorSize, int iteration);
 
 // Function initialize allocates memory for the pagerank vector, reads the
 // dataset from the file and creates the transition probability distribution
