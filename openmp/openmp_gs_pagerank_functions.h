@@ -1,5 +1,5 @@
-#ifndef SERIAL_GS_PAGERANK_FUNCTIONS_H	/* Include guard */
-#define SERIAL_GS_PAGERANK_FUNCTIONS_H
+#ifndef OPENMP_GS_PAGERANK_FUNCTIONS_H	/* Include guard */
+#define OPENMP_GS_PAGERANK_FUNCTIONS_H
 
 /* ===== INCLUDES ===== */
 
@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <omp.h>
 
 #include "coo_sparse_matrix.h"
 
@@ -27,6 +28,7 @@
 extern const char *ARGUMENT_CONVERGENCE_TOLERANCE;
 extern const char *ARGUMENT_MAX_ITERATIONS;
 extern const char *ARGUMENT_DAMPING_FACTOR;
+extern const char *ARGUMENT_THREADS_NUMBER;
 extern const char *ARGUMENT_VERBAL_OUTPUT;
 extern const char *ARGUMENT_OUTPUT_HISTORY;
 extern const char *ARGUMENT_OUTPUT_FILENAME;
@@ -41,7 +43,7 @@ extern const int FILE_READ_BUFFER_SIZE;
 
 // A data structure to conveniently hold the algorithm's parameters.
 typedef struct parameters {
-	int numberOfPages, maxIterations, realIterations;
+	int numberOfPages, maxIterations;
 	double convergenceCriterion, dampingFactor;
 	bool verbose, history;
 	char *outputFilename, *graphFilename;
@@ -71,8 +73,8 @@ void generateNormalizedTransitionMatrixFromFile(CsrSparseMatrix *transitionMatri
 
 // Function savePagerankToFile appends or overwrites the pagerank vector
 // "pagerankVector" to the file with the filename supplied in the arguments.
-void savePagerankToFile(char *filename, bool append, double *pagerankVector,
-	int vectorSize, int realIterations);
+void savePagerankToFile(char *filename, int *iterationsUntilConvergence,
+	double *pagerankVector, int vectorSize, int iteration);
 
 // Function initialize allocates memory for the pagerank vector, reads the
 // dataset from the file and creates the transition probability distribution
@@ -92,7 +94,7 @@ void calculateNextPagerank(CsrSparseMatrix *transitionMatrix,
 // Function pagerank iteratively calculates the pagerank of each page until
 // either the convergence criterion is met or the maximum number of iterations
 // is reached.
-int pagerank(CsrSparseMatrix *transitionMatrix, double **pagerankVector,
-	bool *convergenceStatus, Parameters parameters);
+int* pagerank(CsrSparseMatrix *transitionMatrix, double **pagerankVector,
+	bool *convergenceStatus, Parameters parameters, int* maxIterationsForConvergence);
 
-#endif	// SERIAL_GS_PAGERANK_FUNCTIONS_H
+#endif	// OPENMP_GS_PAGERANK_FUNCTIONS_H

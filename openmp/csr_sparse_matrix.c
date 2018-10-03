@@ -3,7 +3,7 @@
 CsrSparseMatrix initCsrSparseMatrix() {
 	CsrSparseMatrix sparseMatrix;
 	sparseMatrix.size = 0;
-	sparseMatrix.numberOfNonZeroElements = 0;
+	sparseMatrix.numberOfElements = 0;
 
 	sparseMatrix.values = NULL;
 	sparseMatrix.columnIndexes = NULL;
@@ -11,21 +11,23 @@ CsrSparseMatrix initCsrSparseMatrix() {
 	return sparseMatrix;
 }
 
-void allocMemoryForCsr(CsrSparseMatrix *sparseMatrix, int numberOfElements) {
+void allocMemoryForCsr(CsrSparseMatrix *sparseMatrix, int size, int numberOfElements) {
 	sparseMatrix->values = (double *) malloc(numberOfElements * sizeof(double));
 	sparseMatrix->columnIndexes = (int *) malloc(
 		numberOfElements * sizeof(int));
 	sparseMatrix->rowCumulativeIndexes = (int *) malloc(
-		(numberOfElements + 1) * sizeof(int));
+		(size + 1) * sizeof(int));
 
-	for (int i=0; i<numberOfElements+1; ++i) {
+	for (int i=0; i<size+1; ++i) {
 		sparseMatrix->rowCumulativeIndexes[i] = 0;
 	}
-	sparseMatrix->size = numberOfElements;
+
+	sparseMatrix->size = size;
+	sparseMatrix->numberOfElements = numberOfElements;
 }
 
-// Row indexes start from 0!
 void zeroOutRow(CsrSparseMatrix *sparseMatrix, int row) {
+	// Gets start and end indexes of the row's elements
 	int startIndex = sparseMatrix->rowCumulativeIndexes[row],
 	endIndex = sparseMatrix->rowCumulativeIndexes[row+1];
 	for (int i=startIndex; i<endIndex; ++i) {
@@ -34,9 +36,8 @@ void zeroOutRow(CsrSparseMatrix *sparseMatrix, int row) {
 }
 
 void zeroOutColumn(CsrSparseMatrix *sparseMatrix, int column) {
-	for (int i=0; i<sparseMatrix->numberOfNonZeroElements; ++i){
+	for (int i=0; i<sparseMatrix->numberOfElements; ++i){
 		if(sparseMatrix->columnIndexes[i] == column){
-			// Zeros out this element
 			sparseMatrix->values[i] = 0;
 		}
 	}

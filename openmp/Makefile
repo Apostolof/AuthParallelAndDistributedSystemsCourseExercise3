@@ -7,8 +7,8 @@ CC = gcc -std=gnu99 -fopenmp
 RM = rm -f
 CFLAGS_DEBUG=-O0 -ggdb3 -Wall -I.
 CFLAGS=-O3 -Wall -I.
-OBJ=serial_gs_pagerank.o serial_gs_pagerank_functions.o coo_sparse_matrix.o csr_sparse_matrix.o
-DEPS=serial_gs_pagerank_functions.h coo_sparse_matrix.h csr_sparse_matrix.h
+OBJ=openmp_gs_pagerank.o openmp_gs_pagerank_functions.o coo_sparse_matrix.o csr_sparse_matrix.o
+DEPS=openmp_gs_pagerank_functions.h coo_sparse_matrix.h csr_sparse_matrix.h
 
 # ==========================================
 # TARGETS
