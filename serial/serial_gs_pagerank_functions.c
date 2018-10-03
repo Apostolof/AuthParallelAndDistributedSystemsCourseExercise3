@@ -231,7 +231,7 @@ void calculateNextPagerank(CsrSparseMatrix *transitionMatrix,
 	vectorNorm(*pagerankVector, vectorSize);
 
 	for (int i=0; i<vectorSize; ++i) {
-		(*pagerankVector)[i] += normDifference * webUniformProbability +
+		(*pagerankVector)[i] += dampingFactor* normDifference * webUniformProbability +
 		linksFromConvergedPagesPagerankVector[i] + convergedPagerankVector[i];
 	}
 }
